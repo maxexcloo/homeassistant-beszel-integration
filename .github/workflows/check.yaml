@@ -31,12 +31,12 @@ jobs:
         uses: astral-sh/ruff-action@v4.1.0
         with:
           args: check .
-          version: "0.16.2"
+          version: "0.16.9"
       - name: Check Ruff formatting
         uses: astral-sh/ruff-action@v4.1.0
         with:
           args: format --check .
-          version: "0.16.2"
+          version: "0.16.9"
       - name: Run unit tests
         run: python3 -m unittest discover -s tests
 
