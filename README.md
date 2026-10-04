@@ -19,6 +19,7 @@ sensors for hardware, operating system, storage, and network statistics.
 
 - Battery level and charging state.
 - Cached system metrics survive temporary per-system API failures.
+- Cached hardware and operating system details survive temporary details API failures.
 - CPU model, topology, and utilisation.
 - Disk capacity, throughput, latency, and I/O utilisation.
 - Dynamic discovery when systems or metrics appear after setup.
@@ -77,7 +78,7 @@ expires.
 ## Contributing
 
 1. Fork the repository and create a feature branch.
-2. Install Python 3.14 and Ruff 0.16.2.
+2. Install Python 3.14 and Ruff 0.16.10.
 3. Follow the repository standards in `AGENTS.md`.
 4. Run the same checks as CI:
 

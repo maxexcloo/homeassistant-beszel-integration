@@ -149,7 +149,13 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 self.api_client.host,
                 err,
             )
-            return {}
+            return {
+                system_id: {
+                    detail_key: _mapping(_mapping(data).get("info")).get(info_key)
+                    for detail_key, info_key in _DETAILS_TO_INFO.items()
+                }
+                for system_id, data in (self.data or {}).items()
+            }
 
     async def _fetch_individual_system_data(self, system, details):
         """Fetch stats and 'info' for a single system."""

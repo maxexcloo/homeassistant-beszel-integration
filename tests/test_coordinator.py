@@ -2,6 +2,7 @@
 
 import unittest
 
+import support  # noqa: F401 - install dependency stand-ins before importing HA
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from support import FakeHomeAssistant
 
@@ -38,6 +39,31 @@ class FakeApiClient:
 
 class BeszelDataUpdateCoordinatorTests(unittest.IsolatedAsyncioTestCase):
     """Exercise Beszel coordinator update behaviour."""
+
+    async def test_details_failure_retains_cached_info_with_fresh_statistics(self):
+        """A partial details outage must not clear static sensors."""
+
+        class DetailsFailureApi(FakeApiClient):
+            async def async_get_systems(self):
+                return [{"id": "system", "name": "Server", "status": "up"}]
+
+            async def async_get_system_details(self):
+                raise RuntimeError("details unavailable")
+
+        coordinator = BeszelDataUpdateCoordinator(
+            FakeHomeAssistant(),
+            api_client=DetailsFailureApi(),
+            config_entry_id="entry",
+            update_interval_seconds=60,
+        )
+        coordinator.data = {
+            "system": {"info": {"c": 4, "m": "CPU", "k": "kernel", "os": 0}}
+        }
+        with self.assertLogs("custom_components.beszel.coordinator", level="WARNING"):
+            data = await coordinator._async_update_data()
+
+        self.assertEqual(data["system"]["info"], coordinator.data["system"]["info"])
+        self.assertEqual(data["system"]["stats"], {"cpu": 12.5})
 
     async def test_results_remain_mapped_and_failures_use_cache(self):
         """Malformed systems do not shift results and failures retain cache."""
