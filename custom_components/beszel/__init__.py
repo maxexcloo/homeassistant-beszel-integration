@@ -35,7 +35,9 @@ async def async_setup_entry(hass, entry):
 
 async def async_migrate_entry(hass, entry):
     """Migrate legacy config and registry identifiers."""
-    if entry.version > 1:
+    if entry.version > 2:
+        return False
+    if entry.version == 2:
         return True
 
     data = {

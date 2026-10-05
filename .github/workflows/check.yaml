@@ -20,23 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
-          python-version: "3.14"
+          python-version: "3.14.8"
       - name: Run Ruff
         uses: astral-sh/ruff-action@v4.1.0
         with:
           args: check .
-          version: "0.16.10"
+          version-file: pyproject.toml
       - name: Check Ruff formatting
-        uses: astral-sh/ruff-action@v4.1.0
-        with:
-          args: format --check .
-          version: "0.16.10"
+        run: ruff format --check .
       - name: Run unit tests
         run: python3 -m unittest discover -s tests
 
@@ -54,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Validate with hassfest

@@ -60,7 +60,7 @@ class BeszelApiClient:
                 self._is_authenticated = True
                 return
             except ClientResponseError as err:
-                if err.status >= 500:
+                if err.status not in (400, 401, 403, 404):
                     raise
                 last_error = err
 

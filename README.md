@@ -4,8 +4,10 @@
 [![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](custom_components/beszel/manifest.json)
 [![Licence](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 
-Monitor Beszel systems in Home Assistant with automatically discovered diagnostic
+Monitor Beszel systems in Home Assistant with automatically discovered
 sensors for hardware, operating system, storage, and network statistics.
+
+Requires Home Assistant 2026.9.4 or newer.
 
 ## Quick Start
 
@@ -18,8 +20,8 @@ sensors for hardware, operating system, storage, and network statistics.
 ## Features
 
 - Battery level and charging state.
-- Cached system metrics survive temporary per-system API failures.
 - Cached hardware and operating system details survive temporary details API failures.
+- Cached system metrics survive temporary per-system API failures.
 - CPU model, topology, and utilisation.
 - Disk capacity, throughput, latency, and I/O utilisation.
 - Dynamic discovery when systems or metrics appear after setup.
@@ -28,6 +30,7 @@ sensors for hardware, operating system, storage, and network statistics.
 - Multiple Beszel Hubs and systems without device or entity collisions.
 - Per-filesystem and temperature sensors.
 - Reauthentication and reconfiguration through Home Assistant.
+- Temporary connection failures and rate limits retry without prompting for credentials.
 - Translated entity names and enum states.
 
 ## Installation
@@ -71,14 +74,14 @@ To expose additional disks, configure the Beszel agent using the
 [additional disks guide](https://beszel.dev/guide/additional-disks). Each reported
 filesystem receives its own capacity, throughput, and I/O sensors.
 
-Use **Settings → Devices & services → Beszel → Configure** to change the Hub or
+Use **Settings → Devices & services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication
 expires.
 
 ## Contributing
 
 1. Fork the repository and create a feature branch.
-2. Install Python 3.14 and Ruff 0.16.10.
+2. Install Python 3.14.8 and the Ruff version declared in `pyproject.toml`.
 3. Follow the repository standards in `AGENTS.md`.
 4. Run the same checks as CI:
 
@@ -89,6 +92,10 @@ expires.
    ```
 
 5. Submit a pull request with tests and documentation for behavioural changes.
+
+Unit tests use lightweight Home Assistant and PocketBase test doubles. GitHub CI
+also runs HACS and Hassfest validation; the unit tests do not exercise a running
+Home Assistant instance or Beszel Hub.
 
 ## Licence
 

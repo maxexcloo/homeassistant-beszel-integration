@@ -1,3 +1,8 @@
+[dependency-groups]
+lint = ["ruff==0.16.10"]
+
 [tool.ruff]
-required-version = "==0.16.10"
 target-version = "py314"
+
+[tool.ruff.lint]
+extend-select = ["I"]

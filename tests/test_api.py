@@ -13,6 +13,39 @@ from custom_components.beszel.api import BeszelApiAuthError, BeszelApiClient
 class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
     """Exercise Beszel API authentication behaviour."""
 
+    async def test_authentication_connection_failures_are_not_invalid_credentials(self):
+        """Connection failures and rate limits must remain retryable errors."""
+        for status in (0, 408, 429, 500, 503):
+            with self.subTest(status=status):
+                pocketbase = MagicMock()
+                error = ClientResponseError(status=status)
+                pocketbase.collection.return_value.auth_with_password.side_effect = (
+                    error
+                )
+                with patch(
+                    "custom_components.beszel.api.PocketBase", return_value=pocketbase
+                ):
+                    client = BeszelApiClient("beszel.local", "user", "password")
+                    with self.assertRaises(ClientResponseError) as raised:
+                        await client.async_authenticate()
+
+                self.assertIs(raised.exception, error)
+                pocketbase.collection.assert_called_once_with("_superusers")
+
+    async def test_invalid_credentials_raise_authentication_failure(self):
+        """Rejected credentials still trigger Home Assistant reauthentication."""
+        pocketbase = MagicMock()
+        pocketbase.collection.return_value.auth_with_password.side_effect = (
+            ClientResponseError(status=400)
+        )
+        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
+            client = BeszelApiClient("beszel.local", "user", "wrong")
+            with self.assertRaises(BeszelApiAuthError):
+                await client.async_authenticate()
+
+        self.assertFalse(client._is_authenticated)
+        self.assertEqual(pocketbase.collection.call_count, 2)
+
     async def test_authentication_falls_back_to_users(self):
         """Authentication supports current and legacy PocketBase collections."""
         superusers = MagicMock()

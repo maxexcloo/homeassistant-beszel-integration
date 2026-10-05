@@ -23,6 +23,31 @@ class MockConfigEntry:
 class BeszelMigrationTests(unittest.IsolatedAsyncioTestCase):
     """Exercise Beszel config-entry migrations."""
 
+    async def test_future_config_version_is_rejected(self):
+        """A downgrade must not accept an unknown config-entry schema."""
+        entry = MockConfigEntry(
+            data={"future": "value"},
+            domain=DOMAIN,
+            unique_id="future",
+            version=3,
+        )
+
+        self.assertFalse(await async_migrate_entry(FakeHomeAssistant(), entry))
+        self.assertEqual(entry.data, {"future": "value"})
+        self.assertEqual(entry.version, 3)
+
+    async def test_current_config_version_is_unchanged(self):
+        """Current config entries need no migration."""
+        entry = MockConfigEntry(
+            data={"host": "http://beszel.local"},
+            domain=DOMAIN,
+            unique_id="current",
+            version=2,
+        )
+
+        self.assertTrue(await async_migrate_entry(FakeHomeAssistant(), entry))
+        self.assertEqual(entry.data, {"host": "http://beszel.local"})
+
     async def test_migrate_legacy_config_and_identifiers(self):
         """Version one entries retain entities with scoped identifiers."""
         hass = FakeHomeAssistant()
