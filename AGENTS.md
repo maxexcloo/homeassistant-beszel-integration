@@ -37,5 +37,4 @@
 
 ## Verification
 
-- Run `python3.14 -m unittest discover -s tests` for Python changes.
-- Run Ruff checking and formatting validation before committing.
+- Run `mise run check` before handoff.

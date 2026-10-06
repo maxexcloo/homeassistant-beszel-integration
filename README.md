@@ -81,14 +81,12 @@ expires.
 ## Contributing
 
 1. Fork the repository and create a feature branch.
-2. Install Python 3.14.8 and the Ruff version declared in `pyproject.toml`.
+2. Run `mise run setup` to install the pinned development tools.
 3. Follow the repository standards in `AGENTS.md`.
 4. Run the same checks as CI:
 
    ```bash
-   ruff check .
-   ruff format --check .
-   python3.14 -m unittest discover -s tests
+   mise run check
    ```
 
 5. Submit a pull request with tests and documentation for behavioural changes.

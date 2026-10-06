@@ -1,6 +1,3 @@
-[dependency-groups]
-lint = ["ruff==0.16.10"]
-
 [tool.ruff]
 target-version = "py314"
 

@@ -1,0 +1,22 @@
+[tools]
+python = "3.14.8"
+ruff = "0.16.10"
+
+[tasks.check]
+description = "Run all local checks"
+run = """
+ruff check .
+ruff format --check .
+python -m unittest discover -s tests
+"""
+
+[tasks.fmt]
+description = "Format Python files"
+run = """
+ruff check --fix --select I .
+ruff format .
+"""
+
+[tasks.setup]
+description = "Install development tools"
+run = "mise install"
