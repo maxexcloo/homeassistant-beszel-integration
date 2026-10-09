@@ -57,7 +57,7 @@ class BeszelDataUpdateCoordinatorTests(unittest.IsolatedAsyncioTestCase):
             update_interval_seconds=60,
         )
         coordinator.data = {
-            "system": {"info": {"c": 4, "m": "CPU", "k": "kernel", "os": 0}}
+            "system": {"info": {"c": 4, "k": "kernel", "m": "CPU", "os": 0}}
         }
         with self.assertLogs("custom_components.beszel.coordinator", level="WARNING"):
             data = await coordinator._async_update_data()
@@ -76,10 +76,10 @@ class BeszelDataUpdateCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = {
             "failed": {
                 "id": "failed",
-                "info": {},
                 "name": "Failed",
-                "stats": {"cpu": 20},
                 "status": "up",
+                "info": {},
+                "stats": {"cpu": 20},
             }
         }
 

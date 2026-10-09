@@ -22,10 +22,10 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = {
             "system": {
                 "id": "system",
-                "info": {"u": 90},
                 "name": "Server",
-                "stats": {"cpu": 12.5},
                 "status": "up",
+                "info": {"u": 90},
+                "stats": {"cpu": 12.5},
             }
         }
 
@@ -59,10 +59,10 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = {
             "system": {
                 "id": "system",
-                "info": None,
                 "name": "Server",
-                "stats": {"efs": {"disk": None}, "g": {"0": None}, "t": []},
+                "info": None,
                 "status": "up",
+                "stats": {"efs": {"disk": None}, "g": {"0": None}, "t": []},
             }
         }
 
@@ -80,10 +80,10 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = {
             "system": {
                 "id": "system",
-                "info": {},
                 "name": "Server",
-                "stats": {"b": [2097152, 1048576], "dio": [524288, 262144]},
                 "status": "up",
+                "info": {},
+                "stats": {"b": [2097152, 1048576], "dio": [524288, 262144]},
             }
         }
 
@@ -102,10 +102,10 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = {
             "system": {
                 "id": "system",
-                "info": {},
                 "name": "Server",
-                "stats": {"nr": 1.5, "ns": 2.5},
                 "status": "up",
+                "info": {},
+                "stats": {"nr": 1.5, "ns": 2.5},
             }
         }
 
@@ -122,20 +122,17 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = {
             "system": {
                 "id": "system",
-                "info": {},
                 "name": "Server",
-                "stats": {},
                 "status": "up",
+                "info": {},
+                "stats": {},
             }
         }
         initial_ids = {
             sensor.unique_id for sensor in _create_available_sensors(coordinator)
         }
 
-        coordinator.data["system"]["stats"] = {
-            "dios": [1, 2, 3, 4, 5, 6],
-            "dr": 1.5,
-        }
+        coordinator.data["system"]["stats"] = {"dr": 1.5, "dios": [1, 2, 3, 4, 5, 6]}
         later_ids = {
             sensor.unique_id for sensor in _create_available_sensors(coordinator)
         }
@@ -153,10 +150,10 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = {
             "system": {
                 "id": "system",
-                "info": {},
                 "name": "Server",
-                "stats": {},
                 "status": "up",
+                "info": {},
+                "stats": {},
             }
         }
         hass = FakeHomeAssistant()
@@ -196,10 +193,10 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = {
             "system": {
                 "id": "system",
-                "info": {},
                 "name": "Old Name",
-                "stats": {},
                 "status": "up",
+                "info": {},
+                "stats": {},
             }
         }
         hass = FakeHomeAssistant()
@@ -214,7 +211,7 @@ class BeszelSensorTests(unittest.IsolatedAsyncioTestCase):
         )
 
         coordinator.data["system"].update(
-            {"info": {"os": 0, "v": "1.2.3"}, "name": "New Name"}
+            {"name": "New Name", "info": {"os": 0, "v": "1.2.3"}}
         )
         listener = coordinator.async_add_listener.call_args.args[0]
         listener()

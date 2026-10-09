@@ -164,8 +164,8 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
 
         return {
             "id": system_id,
-            "info": _merge_system_info(system.get("info"), details),
             "name": system.get("name", system_id),
-            "stats": stats,
             "status": system.get("status", "unknown"),
+            "info": _merge_system_info(system.get("info"), details),
+            "stats": stats,
         }

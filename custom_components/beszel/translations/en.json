@@ -12,10 +12,10 @@
     },
     "step": {
       "reauth_confirm": {
+        "description": "Enter the current password for {name}.",
         "data": {
           "password": "Password"
-        },
-        "description": "Enter the current password for {name}."
+        }
       },
       "reconfigure": {
         "data": {
