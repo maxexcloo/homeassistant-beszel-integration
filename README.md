@@ -14,7 +14,7 @@ Requires Home Assistant 2026.9.4 or newer.
 1. Add `https://github.com/maxexcloo/homeassistant-beszel-integration` as an
    Integration custom repository in HACS.
 2. Install **Beszel** and restart Home Assistant.
-3. Open **Settings → Devices & services → Add integration**.
+3. Open **Settings → Devices & Services → Add Integration**.
 4. Search for **Beszel** and enter the Hub URL, username, and password.
 
 ## Features
