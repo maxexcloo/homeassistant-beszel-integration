@@ -1,6 +1,6 @@
 [tools]
 python = "3.14.8"
-ruff = "0.16.10"
+ruff = "0.17.0"
 
 [tasks.check]
 description = "Run all local checks"
