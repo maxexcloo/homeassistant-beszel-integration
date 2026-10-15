@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://www.updatecli.io/schema/latest/policy/manifest/config.json
+name: Update Major Action Aliases
+pipelineid: update-major-action-aliases
+autodiscovery:
+  crawlers:
+    github/action:
+      digest: false
+      rootdir: .github
+      credentials:
+        github.com:
+          kind: github
+          token: '{{ env "GITHUB_TOKEN" }}'
+      versionfilter:
+        kind: regex/semver
+        pattern: "*"
+        regex: ^v?([0-9]+)$
+labels:
+  group: actions
