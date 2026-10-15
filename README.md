@@ -1,6 +1,5 @@
 # Beszel Home Assistant Integration
 
-[![Check](https://github.com/maxexcloo/homeassistant-beszel-integration/actions/workflows/check.yaml/badge.svg)](https://github.com/maxexcloo/homeassistant-beszel-integration/actions/workflows/check.yaml)
 [![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](custom_components/beszel/manifest.json)
 [![Licence](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 
@@ -83,7 +82,7 @@ expires.
 1. Fork the repository and create a feature branch.
 2. Run `mise install` to install your configured development tools.
 3. Follow the repository standards in `AGENTS.md`.
-4. Run the same checks as CI:
+4. Run the local checks:
 
    ```bash
    mise run check
@@ -91,9 +90,8 @@ expires.
 
 5. Submit a pull request with tests and documentation for behavioural changes.
 
-Unit tests use lightweight Home Assistant and PocketBase test doubles. GitHub CI
-also runs HACS and Hassfest validation; the unit tests do not exercise a running
-Home Assistant instance or Beszel Hub.
+Unit tests use lightweight Home Assistant and PocketBase test doubles; they do
+not exercise a running Home Assistant instance or Beszel Hub.
 
 ## Licence
 

@@ -2,13 +2,11 @@
 # gh = "latest"
 # python = "latest"
 # ruff = "latest"
-# updatecli = "latest"
 
 # Development
 [tasks.check]
 description = "Run All Local Checks"
 run = """
-updatecli manifest validate --config .updatecli.d --disable-templating --strict
 ruff check .
 ruff format --check .
 python -m unittest discover -s tests
