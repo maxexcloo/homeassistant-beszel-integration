@@ -1,7 +1,6 @@
 # Beszel Home Assistant Integration
 
 [![Check](https://github.com/maxexcloo/homeassistant-beszel-integration/actions/workflows/check.yaml/badge.svg)](https://github.com/maxexcloo/homeassistant-beszel-integration/actions/workflows/check.yaml)
-[![Version](https://img.shields.io/badge/version-0.2.2-blue.svg)](custom_components/beszel/manifest.json)
 [![Licence](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 
 Monitor Beszel systems in Home Assistant with automatically discovered
@@ -77,7 +76,7 @@ To expose additional disks, configure the Beszel agent using the
 [additional disks guide](https://beszel.dev/guide/additional-disks). Each reported
 filesystem receives its own capacity, throughput, and I/O sensors.
 
-Use **Settings → Devices & services → Beszel → ⋮ → Reconfigure** to change the Hub or
+Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication
 expires.
 
