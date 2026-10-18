@@ -45,6 +45,9 @@ class TestBeszelSensor:
         assert uptime.translation_key == "uptime"
         assert status.native_value == "up"
         assert status.options == ["down", "paused", "pending", "unknown", "up"]
+        for value in ("UP", "rebooting", None):
+            coordinator.data["system"]["status"] = value
+            assert status.native_value == ("up" if value == "UP" else "unknown")
 
     def test_malformed_nested_data_is_unavailable(self):
         """Null and malformed nested values do not interrupt discovery."""

@@ -223,8 +223,8 @@ def _uptime_value(value):
 def _standard_value(system_data, description):
     """Return a value for a standard sensor description."""
     if description.data_source == "status":
-        status = system_data.get("status")
-        return str(status).lower() if status is not None else "unknown"
+        status = str(system_data.get("status")).lower()
+        return status if status in description.options else "unknown"
 
     data = _mapping(system_data.get(description.data_source))
     if description.value_fn:
