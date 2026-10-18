@@ -795,12 +795,8 @@ class BeszelCoordinatorSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self):
-        """Return whether this system has current data."""
-        return (
-            super().available
-            and bool(self.system_data)
-            and "error" not in self.system_data
-        )
+        """Return whether the Hub still reports this system."""
+        return super().available and bool(self.system_data)
 
     @property
     def device_info(self):

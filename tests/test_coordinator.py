@@ -92,7 +92,6 @@ class TestBeszelDataUpdateCoordinator:
         assert data["healthy"]["stats"] == {"cpu": 12.5}
         assert data["failed"]["stats"] == {"cpu": 20}
         assert data["failed"]["status"] == "down"
-        assert data["failed"]["error"] == "stats unavailable"
         assert all("http://beszel.local" in message for message in caplog.messages)
 
     async def test_statistics_authentication_failure_starts_reauthentication(

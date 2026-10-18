@@ -98,8 +98,6 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                         result,
                     )
                     cached_data = (self.data or {}).get(system_id, {})
-                    if not isinstance(cached_data, dict):
-                        cached_data = {}
                     info = _merge_system_info(
                         system.get("info"), details_map.get(system_id, {})
                     )
@@ -107,7 +105,6 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                         info = cached_data.get("info")
                     all_system_data[system_id] = {
                         **cached_data,
-                        "error": str(result),
                         "id": system_id,
                         "info": info,
                         "name": system.get("name", system_id),

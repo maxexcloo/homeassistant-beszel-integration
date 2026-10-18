@@ -177,6 +177,13 @@ async def test_integration_setup_update_and_unload(hass):
         assert state("info_os").state == "unknown"
         assert coordinator._listeners
 
+        api.async_get_systems.return_value[0]["status"] = "down"
+        api.async_get_latest_system_stats.side_effect = RuntimeError("stats failed")
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert state("stats_nr").state == "1.5"
+        assert state("status_status").state == "down"
+
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
         assert not coordinator._listeners
