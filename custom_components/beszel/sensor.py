@@ -21,7 +21,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_AGENT_VERSION,
@@ -66,7 +65,15 @@ from .const import (
     ATTR_TEMPERATURES,
     ATTR_THREADS,
     ATTR_UPTIME,
-    DOMAIN,
+)
+from .entity import (
+    BeszelEntity,
+    device_details,
+    device_identifier,
+    entity_unique_id,
+    mapping,
+    os_icon,
+    os_name,
 )
 
 ValueFunction = Callable[[dict[str, Any]], Any]
@@ -78,11 +85,6 @@ class BeszelSensorDescription(SensorEntityDescription):
 
     data_source: str = "stats"
     value_fn: ValueFunction | None = None
-
-
-def _mapping(value):
-    """Return a mapping or an empty mapping for unavailable data."""
-    return value if isinstance(value, dict) else {}
 
 
 def _array_value(data, key, index, precision=2):
@@ -167,37 +169,6 @@ def _used_percent(data, total_key, used_key):
         return None
 
 
-def _os_name(value):
-    """Return the operating-system name for a Beszel type code."""
-    return {
-        0: "Linux",
-        1: "Darwin (macOS)",
-        2: "Windows",
-        3: "FreeBSD",
-    }.get(value)
-
-
-def _os_icon(value):
-    """Return the operating-system icon for a Beszel type code."""
-    return {
-        0: "mdi:linux",
-        1: "mdi:apple",
-        2: "mdi:microsoft-windows",
-        3: "mdi:freebsd",
-    }.get(value)
-
-
-def _device_details(system_id, system_data):
-    """Return registry details for a Beszel system."""
-    info = _mapping(system_data.get("info"))
-    os_name = _os_name(info.get(ATTR_OS))
-    return {
-        "model": os_name,
-        "name": system_data.get("name", system_id),
-        "sw_version": info.get(ATTR_AGENT_VERSION),
-    }
-
-
 def _normalise_value(value, native_unit):
     """Normalise values whose Home Assistant representation is constrained."""
     if value is not None and native_unit == PERCENTAGE:
@@ -227,13 +198,13 @@ def _standard_value(system_data, description):
         status = str(system_data.get("status")).lower()
         return status if status in description.options else "unknown"
 
-    data = _mapping(system_data.get(description.data_source))
+    data = mapping(system_data.get(description.data_source))
     if description.value_fn:
         return description.value_fn(data)
 
     value = data.get(description.key)
     if description.key == ATTR_OS and description.data_source == "info":
-        return _os_name(value)
+        return os_name(value)
     if description.key == ATTR_UPTIME and description.data_source == "info":
         return _uptime_value(value)
     return _normalise_value(value, description.native_unit_of_measurement)
@@ -241,9 +212,9 @@ def _standard_value(system_data, description):
 
 def _nested_value(system_data, parent_key, item_key, description):
     """Return a value from a nested Beszel statistics mapping."""
-    stats = _mapping(system_data.get("stats"))
-    parent = _mapping(stats.get(parent_key))
-    item = _mapping(parent.get(item_key))
+    stats = mapping(system_data.get("stats"))
+    parent = mapping(stats.get(parent_key))
+    item = mapping(parent.get(item_key))
     if description.value_fn:
         return description.value_fn(item)
     return _normalise_value(
@@ -613,21 +584,25 @@ GPU_SENSOR_DESCRIPTIONS = (
 
 
 def _standard_unique_id(coordinator, system_id, description):
-    return (
-        f"{DOMAIN}_{coordinator.config_entry.entry_id}_{system_id}_"
-        f"{description.data_source}_{description.key}"
+    return entity_unique_id(
+        coordinator.config_entry.entry_id,
+        system_id,
+        f"{description.data_source}_{description.key}",
     )
 
 
 def _nested_unique_id(coordinator, system_id, parent_key, item_key, api_key):
-    return (
-        f"{DOMAIN}_{coordinator.config_entry.entry_id}_{system_id}_stats_"
-        f"{parent_key}_{item_key}_{api_key}"
+    return entity_unique_id(
+        coordinator.config_entry.entry_id,
+        system_id,
+        f"stats_{parent_key}_{item_key}_{api_key}",
     )
 
 
 def _temperature_unique_id(coordinator, system_id, temperature_key):
-    return f"{DOMAIN}_{coordinator.config_entry.entry_id}_{system_id}_temperature_{temperature_key}"
+    return entity_unique_id(
+        coordinator.config_entry.entry_id, system_id, f"temperature_{temperature_key}"
+    )
 
 
 def _create_available_sensors(coordinator, known_unique_ids=None):
@@ -635,7 +610,7 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
     known_unique_ids = known_unique_ids or set()
     entities = []
     for system_id, raw_system_data in (coordinator.data or {}).items():
-        system_data = _mapping(raw_system_data)
+        system_data = mapping(raw_system_data)
 
         for description in (*INFO_SENSOR_DESCRIPTIONS, *STATS_SENSOR_DESCRIPTIONS):
             unique_id = _standard_unique_id(coordinator, system_id, description)
@@ -645,14 +620,14 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
             if value is not None:
                 entities.append(BeszelSensor(coordinator, system_id, description))
 
-        stats = _mapping(system_data.get("stats"))
+        stats = mapping(system_data.get("stats"))
         for parent_key, descriptions, placeholder in (
             (ATTR_EXTRA_FS, EXTRA_FS_SENSOR_DESCRIPTIONS, "filesystem"),
             (ATTR_GPU_DATA, GPU_SENSOR_DESCRIPTIONS, "gpu"),
         ):
-            items = _mapping(stats.get(parent_key))
+            items = mapping(stats.get(parent_key))
             for item_key in sorted(items, key=str):
-                item = _mapping(items.get(item_key))
+                item = mapping(items.get(item_key))
                 item_name = (
                     item.get(ATTR_GPU_NAME) or item_key
                     if parent_key == ATTR_GPU_DATA
@@ -684,7 +659,7 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
                         )
                     )
 
-        temperatures = _mapping(stats.get(ATTR_TEMPERATURES))
+        temperatures = mapping(stats.get(ATTR_TEMPERATURES))
         for temperature_name in sorted(temperatures, key=str):
             unique_id = _temperature_unique_id(coordinator, system_id, temperature_name)
             if unique_id in known_unique_ids:
@@ -711,11 +686,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
     def update_registered_devices():
         for system_id, raw_system_data in (coordinator.data or {}).items():
             device = device_registry.async_get_device_by_identifier(
-                (DOMAIN, f"{entry.entry_id}_{system_id}"), entry.entry_id
+                device_identifier(entry.entry_id, system_id), entry.entry_id
             )
             if device is None:
                 continue
-            details = _device_details(system_id, _mapping(raw_system_data))
+            details = device_details(system_id, mapping(raw_system_data))
             changes = {
                 key: value
                 for key, value in details.items()
@@ -736,43 +711,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entry.async_on_unload(coordinator.async_add_listener(async_discover_entities))
 
 
-class BeszelCoordinatorSensor(CoordinatorEntity, SensorEntity):
+class BeszelCoordinatorSensor(BeszelEntity, SensorEntity):
     """Base class for a sensor associated with a Beszel system."""
-
-    _attr_has_entity_name = True
 
     def __init__(self, coordinator, system_id, description):
         """Initialise the system sensor."""
-        super().__init__(coordinator)
-        self._system_id = system_id
+        super().__init__(coordinator, system_id)
         self.entity_description = description
-
-    @property
-    def system_data(self):
-        """Return current data for this sensor's system."""
-        return _mapping((self.coordinator.data or {}).get(self._system_id))
-
-    @property
-    def available(self):
-        """Return whether the Hub still reports this system."""
-        return super().available and bool(self.system_data)
-
-    @property
-    def device_info(self):
-        """Return current device information for the system."""
-        details = _device_details(self._system_id, self.system_data)
-        device_info = {
-            "identifiers": {
-                (DOMAIN, f"{self.coordinator.config_entry.entry_id}_{self._system_id}")
-            },
-            "manufacturer": "Beszel",
-            "name": details["name"],
-        }
-        if details["model"]:
-            device_info["model"] = details["model"]
-        if details["sw_version"]:
-            device_info["sw_version"] = details["sw_version"]
-        return device_info
 
 
 class BeszelNestedSensor(BeszelCoordinatorSensor):
@@ -826,8 +771,8 @@ class BeszelSensor(BeszelCoordinatorSensor):
             self.entity_description.key == ATTR_OS
             and self.entity_description.data_source == "info"
         ):
-            info = _mapping(self.system_data.get("info"))
-            return _os_icon(info.get(ATTR_OS))
+            info = mapping(self.system_data.get("info"))
+            return os_icon(info.get(ATTR_OS))
         return None
 
     @property
@@ -869,8 +814,8 @@ class BeszelTemperatureSensor(BeszelCoordinatorSensor):
     @property
     def native_value(self):
         """Return the state of the sensor."""
-        stats = _mapping(self.system_data.get("stats"))
-        temperatures = _mapping(stats.get(ATTR_TEMPERATURES))
+        stats = mapping(self.system_data.get("stats"))
+        temperatures = mapping(stats.get(ATTR_TEMPERATURES))
         value = temperatures.get(self._temperature_key)
         if value is None:
             return None

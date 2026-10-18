@@ -4,7 +4,16 @@ from homeassistant.const import Platform
 
 DEFAULT_UPDATE_INTERVAL_SECONDS = 60
 DOMAIN = "beszel"
+MANUFACTURER = "Beszel"
 PLATFORMS = [Platform.SENSOR]
+
+# Beszel OS type codes mapped to display names and icons
+OPERATING_SYSTEMS = {
+    0: ("Linux", "mdi:linux"),
+    1: ("Darwin (macOS)", "mdi:apple"),
+    2: ("Windows", "mdi:microsoft-windows"),
+    3: ("FreeBSD", "mdi:freebsd"),
+}
 
 # Beszel SystemInfo fields
 ATTR_AGENT_VERSION = "v"
