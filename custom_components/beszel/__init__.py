@@ -8,6 +8,7 @@ from homeassistant.helpers import entity_registry as er
 from .api import BeszelApiClient, normalise_host, unique_id
 from .const import DEFAULT_UPDATE_INTERVAL_SECONDS, DOMAIN, PLATFORMS
 from .coordinator import BeszelDataUpdateCoordinator
+from .entity import device_identifier
 
 
 async def async_setup_entry(hass, entry):
@@ -106,7 +107,7 @@ async def async_unload_entry(hass, entry):
 async def async_remove_config_entry_device(hass, entry, device_entry):
     """Allow removing devices for systems the Beszel Hub no longer reports."""
     reported = {
-        (DOMAIN, f"{entry.entry_id}_{system_id}")
+        device_identifier(entry.entry_id, system_id)
         for system_id in entry.runtime_data.data
     }
     return reported.isdisjoint(device_entry.identifiers)
