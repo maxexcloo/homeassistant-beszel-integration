@@ -250,3 +250,22 @@ def test_missing_operating_system_is_none():
             sensor.unique_id.endswith("_info_os")
             for sensor in _create_available_sensors(coordinator)
         )
+
+
+def test_temperature_names_follow_the_cpu_thermal_rule():
+    """Only CPU thermal zones use the CPU name; other keys keep readable names."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "entry"
+    coordinator.data = {
+        "system": {"stats": {"t": {"cpu_thermal": 40, "nvme_composite": 30}}}
+    }
+    by_key = {
+        sensor.unique_id.rsplit("_temperature_", 1)[1]: sensor
+        for sensor in _create_available_sensors(coordinator)
+        if "_temperature_" in sensor.unique_id
+    }
+    assert by_key["cpu_thermal"].translation_key == "cpu_temperature"
+    assert by_key["nvme_composite"].translation_key == "temperature"
+    assert by_key["nvme_composite"].translation_placeholders == {
+        "temperature": "NVMe Composite"
+    }

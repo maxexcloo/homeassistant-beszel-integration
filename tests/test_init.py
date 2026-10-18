@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.const import EntityCategory
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -166,6 +167,11 @@ async def test_integration_setup_update_and_unload(hass):
         assert state("info_os").state == "Linux"
         assert state("info_u").state == "90"
         assert len(er.async_entries_for_config_entry(registry, entry.entry_id)) == 10
+        assert state("info_os").attributes.get("icon") == "mdi:linux"
+        assert registry.async_get(state("info_os").entity_id).entity_category == (
+            EntityCategory.DIAGNOSTIC
+        )
+        assert "state_class" not in state("info_u").attributes
 
         api.async_get_systems.return_value[0]["info"] = {}
         api.async_get_latest_system_stats.return_value = {"nr": 1.5, "t": {"cpu": 47}}

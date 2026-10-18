@@ -1,0 +1,153 @@
+{
+  "entity": {
+    "sensor": {
+      "agent_version": {
+        "default": "mdi:information-outline"
+      },
+      "battery_level": {
+        "default": "mdi:battery"
+      },
+      "battery_state": {
+        "default": "mdi:battery-charging"
+      },
+      "cpu_cores": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "cpu_model": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "cpu_temperature": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "cpu_threads": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "cpu_usage": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "disk_io_utilisation": {
+        "default": "mdi:harddisk"
+      },
+      "disk_read_await": {
+        "default": "mdi:timer-outline"
+      },
+      "disk_read_speed": {
+        "default": "mdi:arrow-down-bold-circle-outline"
+      },
+      "disk_read_time": {
+        "default": "mdi:harddisk"
+      },
+      "disk_total": {
+        "default": "mdi:harddisk"
+      },
+      "disk_usage": {
+        "default": "mdi:harddisk"
+      },
+      "disk_used": {
+        "default": "mdi:harddisk"
+      },
+      "disk_weighted_io": {
+        "default": "mdi:harddisk"
+      },
+      "disk_write_await": {
+        "default": "mdi:timer-outline"
+      },
+      "disk_write_speed": {
+        "default": "mdi:arrow-up-bold-circle-outline"
+      },
+      "disk_write_time": {
+        "default": "mdi:harddisk"
+      },
+      "filesystem_io_utilisation": {
+        "default": "mdi:harddisk"
+      },
+      "filesystem_read_await": {
+        "default": "mdi:timer-outline"
+      },
+      "filesystem_read_speed": {
+        "default": "mdi:arrow-down-bold-circle-outline"
+      },
+      "filesystem_read_time": {
+        "default": "mdi:harddisk"
+      },
+      "filesystem_total": {
+        "default": "mdi:harddisk"
+      },
+      "filesystem_usage": {
+        "default": "mdi:harddisk"
+      },
+      "filesystem_used": {
+        "default": "mdi:harddisk"
+      },
+      "filesystem_weighted_io": {
+        "default": "mdi:harddisk"
+      },
+      "filesystem_write_await": {
+        "default": "mdi:timer-outline"
+      },
+      "filesystem_write_speed": {
+        "default": "mdi:arrow-up-bold-circle-outline"
+      },
+      "filesystem_write_time": {
+        "default": "mdi:harddisk"
+      },
+      "gpu_memory_total": {
+        "default": "mdi:memory"
+      },
+      "gpu_memory_used": {
+        "default": "mdi:memory"
+      },
+      "gpu_package_power": {
+        "default": "mdi:lightning-bolt-outline"
+      },
+      "gpu_power_draw": {
+        "default": "mdi:lightning-bolt"
+      },
+      "gpu_usage": {
+        "default": "mdi:expansion-card"
+      },
+      "kernel_version": {
+        "default": "mdi:chip"
+      },
+      "memory_buffer_cache": {
+        "default": "mdi:memory"
+      },
+      "memory_total": {
+        "default": "mdi:memory"
+      },
+      "memory_usage": {
+        "default": "mdi:memory"
+      },
+      "memory_used": {
+        "default": "mdi:memory"
+      },
+      "memory_zfs_arc": {
+        "default": "mdi:memory"
+      },
+      "network_received_speed": {
+        "default": "mdi:download-network-outline"
+      },
+      "network_sent_speed": {
+        "default": "mdi:upload-network-outline"
+      },
+      "operating_system": {
+        "default": "mdi:linux"
+      },
+      "status": {
+        "default": "mdi:server-network"
+      },
+      "swap_total": {
+        "default": "mdi:harddisk"
+      },
+      "swap_usage": {
+        "default": "mdi:harddisk"
+      },
+      "swap_used": {
+        "default": "mdi:harddisk"
+      },
+      "uptime": {
+        "default": "mdi:timer-sand"
+      }
+    }
+  }
+}
