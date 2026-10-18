@@ -2,8 +2,10 @@
 
 import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.api import BeszelApiAuthError
+from custom_components.beszel.const import DOMAIN
 from custom_components.beszel.coordinator import BeszelDataUpdateCoordinator
 
 
@@ -43,32 +45,37 @@ class TestBeszelDataUpdateCoordinator:
         """A partial details outage must not clear static sensors."""
 
         class DetailsFailureApi(FakeApiClient):
+            details_available = True
+
             async def async_get_systems(self):
                 return [{"id": "system", "name": "Server", "status": "up"}]
 
             async def async_get_system_details(self):
-                raise RuntimeError("details unavailable")
+                if not self.details_available:
+                    raise RuntimeError("details unavailable")
+                return {"system": {"cores": 4, "cpu": "CPU", "kernel": "k", "os": 0}}
 
+        api = DetailsFailureApi()
         coordinator = BeszelDataUpdateCoordinator(
             hass,
-            api_client=DetailsFailureApi(),
-            config_entry_id="entry",
+            api_client=api,
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
-        coordinator.data = {
-            "system": {"info": {"c": 4, "k": "kernel", "m": "CPU", "os": 0}}
-        }
+        info = (await coordinator._async_update_data())["system"]["info"]
+        api.details_available = False
         with caplog.at_level("WARNING", logger="custom_components.beszel.coordinator"):
             data = await coordinator._async_update_data()
-        assert data["system"]["info"] == coordinator.data["system"]["info"]
+        assert data["system"]["info"] == info == {"c": 4, "k": "k", "m": "CPU", "os": 0}
         assert data["system"]["stats"] == {"cpu": 12.5}
+        assert "details unavailable" in caplog.text
 
     async def test_results_remain_mapped_and_failures_use_cache(self, hass, caplog):
         """Malformed systems do not shift results and failures retain cache."""
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=FakeApiClient(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         coordinator.data = {
@@ -85,7 +92,6 @@ class TestBeszelDataUpdateCoordinator:
         assert data["healthy"]["stats"] == {"cpu": 12.5}
         assert data["failed"]["stats"] == {"cpu": 20}
         assert data["failed"]["status"] == "down"
-        assert data["failed"]["error"] == "stats unavailable"
         assert all("http://beszel.local" in message for message in caplog.messages)
 
     async def test_statistics_authentication_failure_starts_reauthentication(
@@ -103,7 +109,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=AuthenticationFailureApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         with pytest.raises(ConfigEntryAuthFailed, match="beszel.local"):
@@ -122,7 +128,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=MissingStatisticsApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         data = await coordinator._async_update_data()
@@ -149,7 +155,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=DetailedApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         data = await coordinator._async_update_data()
@@ -178,7 +184,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=DetailedApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         data = await coordinator._async_update_data()

@@ -1,4 +1,5 @@
 {
   "homeassistant": "2026.9.4",
-  "name": "Beszel"
+  "name": "Beszel",
+  "render_readme": true
 }

@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://www.updatecli.io/schema/latest/policy/manifest/config.json
+name: Update PocketBase
+pipelineid: update-pocketbase
+labels:
+  group: python
+sources:
+  version:
+    kind: pypi
+    spec:
+      name: pocketbase
+      versionfilter:
+        kind: pep440
+        pattern: "*"
+targets:
+  manifest:
+    kind: file
+    sourceid: version
+    spec:
+      file: custom_components/beszel/manifest.json
+      matchpattern: (pocketbase==)[0-9.]+
+      replacepattern: ${1}{{ source "version" }}
+  test:
+    kind: file
+    sourceid: version
+    spec:
+      file: requirements-test.txt
+      matchpattern: (pocketbase==)[0-9.]+
+      replacepattern: ${1}{{ source "version" }}

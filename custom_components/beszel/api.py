@@ -6,6 +6,18 @@ from pocketbase import PocketBase
 from pocketbase.utils import ClientResponseError, validate_token
 
 
+def normalise_host(host):
+    """Return a Beszel Hub URL with a scheme and without a trailing slash."""
+    if not host.startswith(("http://", "https://")):
+        host = f"http://{host}"
+    return host.rstrip("/")
+
+
+def unique_id(host, username):
+    """Return the config entry unique ID for a Beszel Hub account."""
+    return f"{normalise_host(host)}_{username}"
+
+
 class BeszelApiAuthError(Exception):
     """Custom exception for authentication errors."""
 
@@ -15,9 +27,7 @@ class BeszelApiClient:
 
     def __init__(self, host, username, password):
         """Initialise the API client."""
-        if not host.startswith(("http://", "https://")):
-            host = f"http://{host}"
-        host = host.rstrip("/")
+        host = normalise_host(host)
         self._client = PocketBase(host)
         self._host = host
         self._is_authenticated = False
@@ -66,7 +76,7 @@ class BeszelApiClient:
                 1,
                 1,
                 query_params={
-                    "filter": f'system="{system_id}"',
+                    "filter": f'system="{system_id}" && type="1m"',
                     "sort": "-created",
                 },
             )

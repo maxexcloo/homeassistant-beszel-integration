@@ -8,7 +8,8 @@
     "error": {
       "already_configured": "This Beszel Hub account is already configured.",
       "cannot_connect": "Unable to connect to the Beszel Hub.",
-      "invalid_auth": "The username or password is invalid."
+      "invalid_auth": "The username or password is invalid.",
+      "unknown": "An unexpected error occurred."
     },
     "step": {
       "reauth_confirm": {

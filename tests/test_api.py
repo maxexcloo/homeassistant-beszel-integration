@@ -97,6 +97,31 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(result)
 
+    async def test_latest_statistics_query_one_minute_records(self):
+        """Longer averaged records must not replace the latest live sample."""
+        collection = MagicMock()
+        collection.get_list.return_value = SimpleNamespace(
+            items=[SimpleNamespace(stats={"cpu": 12.5})]
+        )
+        pocketbase = MagicMock()
+        pocketbase.collection.return_value = collection
+
+        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
+            client = BeszelApiClient("beszel.local", "user", "password")
+            client.async_authenticate = AsyncMock()
+            result = await client.async_get_latest_system_stats("system")
+
+        self.assertEqual(result, {"cpu": 12.5})
+        pocketbase.collection.assert_called_once_with("system_stats")
+        collection.get_list.assert_called_once_with(
+            1,
+            1,
+            query_params={
+                "filter": 'system="system" && type="1m"',
+                "sort": "-created",
+            },
+        )
+
     async def test_statistics_authentication_failure_is_raised(self):
         """An expired statistics token is exposed as an authentication error."""
         collection = MagicMock()

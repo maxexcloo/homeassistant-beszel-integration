@@ -16,8 +16,6 @@
 ## Style
 
 - Add focused Home Assistant tests for behavioural changes.
-- Follow Home Assistant conventions and prefer direct, readable code.
-- Keep comments minimal and limited to complex business logic.
+- Group Beszel field constants by their source struct and sort each group alphabetically.
 - Keep configuration and entity names stable unless a migration is included.
-- Sort imports with Ruff and keep constants and helpers consistently ordered.
 - Update `README.md` with feature changes.

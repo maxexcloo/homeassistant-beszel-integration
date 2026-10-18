@@ -27,14 +27,9 @@ _DETAILS_TO_INFO = {
 }
 
 
-def _mapping(value):
-    """Return a mapping or an empty mapping for unavailable data."""
-    return value if isinstance(value, dict) else {}
-
-
 def _merge_system_info(info, details):
     """Merge static Beszel details into a system info mapping."""
-    merged = dict(_mapping(info))
+    merged = dict(info or {})
     for detail_key, info_key in _DETAILS_TO_INFO.items():
         if info_key in merged:
             continue
@@ -47,24 +42,22 @@ def _merge_system_info(info, details):
 class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
     """Manages fetching data from the Beszel API."""
 
-    def __init__(self, hass, api_client, config_entry_id, update_interval_seconds):
+    def __init__(self, hass, api_client, config_entry, update_interval_seconds):
         """Initialise the data update coordinator."""
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=update_interval_seconds),
         )
+        self._details = {}
         self.api_client = api_client
-        self.config_entry_id = config_entry_id
 
     async def _async_update_data(self):
         """Fetch data from API endpoint."""
         try:
             systems = await self.api_client.async_get_systems()
-            if not isinstance(systems, list):
-                raise TypeError("Beszel Hub returned an invalid systems response")
-
             if not systems:
                 _LOGGER.info("No systems found on Beszel Hub %s", self.api_client.host)
                 return {}
@@ -72,7 +65,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             all_system_data = {}
             systems_with_ids = []
             for system in systems:
-                if isinstance(system, dict) and system.get("id"):
+                if system.get("id"):
                     systems_with_ids.append(system)
                     continue
                 _LOGGER.warning(
@@ -105,8 +98,6 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                         result,
                     )
                     cached_data = (self.data or {}).get(system_id, {})
-                    if not isinstance(cached_data, dict):
-                        cached_data = {}
                     info = _merge_system_info(
                         system.get("info"), details_map.get(system_id, {})
                     )
@@ -114,7 +105,6 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                         info = cached_data.get("info")
                     all_system_data[system_id] = {
                         **cached_data,
-                        "error": str(result),
                         "id": system_id,
                         "info": info,
                         "name": system.get("name", system_id),
@@ -136,9 +126,9 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             ) from err
 
     async def _fetch_system_details(self):
-        """Fetch static system details, tolerating hubs that lack them."""
+        """Fetch static system details, reusing the last details on failure."""
         try:
-            return await self.api_client.async_get_system_details()
+            self._details = await self.api_client.async_get_system_details()
         except BeszelApiAuthError:
             raise
         except Exception as err:  # noqa: BLE001 - details are best-effort
@@ -147,13 +137,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 self.api_client.host,
                 err,
             )
-            return {
-                system_id: {
-                    detail_key: _mapping(_mapping(data).get("info")).get(info_key)
-                    for detail_key, info_key in _DETAILS_TO_INFO.items()
-                }
-                for system_id, data in (self.data or {}).items()
-            }
+        return self._details
 
     async def _fetch_individual_system_data(self, system, details):
         """Fetch stats and 'info' for a single system."""
