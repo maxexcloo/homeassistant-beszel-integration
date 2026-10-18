@@ -45,25 +45,30 @@ class TestBeszelDataUpdateCoordinator:
         """A partial details outage must not clear static sensors."""
 
         class DetailsFailureApi(FakeApiClient):
+            details_available = True
+
             async def async_get_systems(self):
                 return [{"id": "system", "name": "Server", "status": "up"}]
 
             async def async_get_system_details(self):
-                raise RuntimeError("details unavailable")
+                if not self.details_available:
+                    raise RuntimeError("details unavailable")
+                return {"system": {"cores": 4, "cpu": "CPU", "kernel": "k", "os": 0}}
 
+        api = DetailsFailureApi()
         coordinator = BeszelDataUpdateCoordinator(
             hass,
-            api_client=DetailsFailureApi(),
+            api_client=api,
             config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
-        coordinator.data = {
-            "system": {"info": {"c": 4, "k": "kernel", "m": "CPU", "os": 0}}
-        }
+        info = (await coordinator._async_update_data())["system"]["info"]
+        api.details_available = False
         with caplog.at_level("WARNING", logger="custom_components.beszel.coordinator"):
             data = await coordinator._async_update_data()
-        assert data["system"]["info"] == coordinator.data["system"]["info"]
+        assert data["system"]["info"] == info == {"c": 4, "k": "k", "m": "CPU", "os": 0}
         assert data["system"]["stats"] == {"cpu": 12.5}
+        assert "details unavailable" in caplog.text
 
     async def test_results_remain_mapped_and_failures_use_cache(self, hass, caplog):
         """Malformed systems do not shift results and failures retain cache."""
