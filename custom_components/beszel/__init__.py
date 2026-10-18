@@ -5,7 +5,7 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
-from .api import BeszelApiClient
+from .api import BeszelApiClient, normalise_host, unique_id
 from .const import DEFAULT_UPDATE_INTERVAL_SECONDS, DOMAIN, PLATFORMS
 from .coordinator import BeszelDataUpdateCoordinator
 
@@ -45,10 +45,6 @@ async def async_migrate_entry(hass, entry):
             CONF_PASSWORD: entry.data["Password"],
             CONF_USERNAME: entry.data["Username"],
         }
-        api_client = BeszelApiClient(
-            data[CONF_HOST], data[CONF_USERNAME], data[CONF_PASSWORD]
-        )
-
         entity_registry = er.async_get(hass)
         for entity in er.async_entries_for_config_entry(
             entity_registry, entry.entry_id
@@ -82,8 +78,8 @@ async def async_migrate_entry(hass, entry):
 
         hass.config_entries.async_update_entry(
             entry,
-            data={**data, CONF_HOST: api_client.host},
-            unique_id=f"{api_client.host}_{data[CONF_USERNAME]}",
+            data={**data, CONF_HOST: normalise_host(data[CONF_HOST])},
+            unique_id=unique_id(data[CONF_HOST], data[CONF_USERNAME]),
             version=2,
         )
 

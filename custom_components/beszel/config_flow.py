@@ -5,8 +5,9 @@ import logging
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from pocketbase.utils import ClientResponseError
 
-from .api import BeszelApiAuthError, BeszelApiClient
+from .api import BeszelApiAuthError, BeszelApiClient, normalise_host, unique_id
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,30 +21,29 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
+async def _async_validate_input(data):
+    """Return form errors for Beszel connection details."""
+    api_client = BeszelApiClient(
+        data[CONF_HOST], data[CONF_USERNAME], data[CONF_PASSWORD]
+    )
+    try:
+        await api_client.async_authenticate()
+    except BeszelApiAuthError:
+        return {"base": "invalid_auth"}
+    except ClientResponseError:
+        return {"base": "cannot_connect"}
+    except Exception:
+        _LOGGER.exception(
+            "Unexpected exception validating Beszel Hub %s", api_client.host
+        )
+        return {"base": "unknown"}
+    return {}
+
+
 class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Beszel."""
 
     VERSION = 3
-
-    async def _async_validate_input(self, user_input):
-        """Validate Beszel connection details."""
-        api_client = BeszelApiClient(
-            user_input[CONF_HOST],
-            user_input[CONF_USERNAME],
-            user_input[CONF_PASSWORD],
-        )
-        await api_client.async_authenticate()
-        return api_client
-
-    def _schema_with_defaults(self, data):
-        """Return the connection schema populated with safe defaults."""
-        return vol.Schema(
-            {
-                vol.Required(CONF_HOST, default=data.get(CONF_HOST, "")): str,
-                vol.Required(CONF_USERNAME, default=data.get(CONF_USERNAME, "")): str,
-                vol.Required(CONF_PASSWORD): str,
-            }
-        )
 
     async def async_step_reauth(self, entry_data):
         """Start reauthentication for an existing entry."""
@@ -55,23 +55,15 @@ class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            updated_data = {**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
-            try:
-                await self._async_validate_input(updated_data)
-            except BeszelApiAuthError:
-                errors["base"] = "invalid_auth"
-            except Exception:
-                _LOGGER.exception(
-                    "Unexpected exception during reauthentication for Beszel Hub %s",
-                    updated_data[CONF_HOST],
-                )
-                errors["base"] = "cannot_connect"
-            else:
-                return self.async_update_reload_and_abort(entry, data=updated_data)
+            data = {**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
+            errors = await _async_validate_input(data)
+            if not errors:
+                return self.async_update_reload_and_abort(entry, data=data)
 
         return self.async_show_form(
             step_id="reauth_confirm",
             data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
+            description_placeholders={"name": entry.title},
             errors=errors,
         )
 
@@ -81,36 +73,33 @@ class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            try:
-                api_client = await self._async_validate_input(user_input)
-            except BeszelApiAuthError:
-                errors["base"] = "invalid_auth"
-            except Exception:
-                _LOGGER.exception(
-                    "Unexpected exception during reconfiguration for Beszel Hub %s",
-                    user_input[CONF_HOST],
+            errors = await _async_validate_input(user_input)
+            if not errors:
+                entry_unique_id = unique_id(
+                    user_input[CONF_HOST], user_input[CONF_USERNAME]
                 )
-                errors["base"] = "cannot_connect"
-            else:
-                unique_id = f"{api_client.host}_{user_input[CONF_USERNAME]}"
                 existing_entry = (
                     self.hass.config_entries.async_entry_for_domain_unique_id(
-                        DOMAIN, unique_id
+                        DOMAIN, entry_unique_id
                     )
                 )
                 if existing_entry and existing_entry.entry_id != entry.entry_id:
                     errors["base"] = "already_configured"
                 else:
+                    host = normalise_host(user_input[CONF_HOST])
                     return self.async_update_reload_and_abort(
                         entry,
-                        unique_id=unique_id,
-                        title=api_client.host,
-                        data={**user_input, CONF_HOST: api_client.host},
+                        unique_id=entry_unique_id,
+                        title=host,
+                        data={**user_input, CONF_HOST: host},
                     )
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self._schema_with_defaults(entry.data),
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_USER_DATA_SCHEMA,
+                {key: entry.data[key] for key in (CONF_HOST, CONF_USERNAME)},
+            ),
             errors=errors,
         )
 
@@ -118,23 +107,15 @@ class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors = {}
         if user_input is not None:
-            try:
-                api_client = await self._async_validate_input(user_input)
-            except BeszelApiAuthError:
-                errors["base"] = "invalid_auth"
-            except Exception:
-                _LOGGER.exception(
-                    "Unexpected exception during setup for Beszel Hub %s",
-                    user_input[CONF_HOST],
+            errors = await _async_validate_input(user_input)
+            if not errors:
+                await self.async_set_unique_id(
+                    unique_id(user_input[CONF_HOST], user_input[CONF_USERNAME])
                 )
-                errors["base"] = "cannot_connect"
-            else:
-                unique_id = f"{api_client.host}_{user_input[CONF_USERNAME]}"
-                await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
+                host = normalise_host(user_input[CONF_HOST])
                 return self.async_create_entry(
-                    title=api_client.host,
-                    data={**user_input, CONF_HOST: api_client.host},
+                    title=host, data={**user_input, CONF_HOST: host}
                 )
 
         return self.async_show_form(
