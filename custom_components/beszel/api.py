@@ -67,6 +67,14 @@ class BeszelApiClient:
         self._is_authenticated = False
         raise BeszelApiAuthError("Authentication failed") from last_error
 
+    def _raise_if_unauthorised(self, err):
+        """Raise an authentication error when the Hub rejects the session."""
+        if err.status in (401, 403):
+            self._is_authenticated = False
+            raise BeszelApiAuthError(
+                "Token likely expired, re-authentication needed"
+            ) from err
+
     async def async_get_latest_system_stats(self, system_id):
         """Fetch the latest stats for a specific system."""
         await self.async_authenticate()
@@ -84,11 +92,7 @@ class BeszelApiClient:
                 return vars(result.items[0]).get("stats")
             return None
         except ClientResponseError as err:
-            if err.status in (401, 403):
-                self._is_authenticated = False
-                raise BeszelApiAuthError(
-                    "Token likely expired, re-authentication needed"
-                ) from err
+            self._raise_if_unauthorised(err)
             raise
 
     async def async_get_system_details(self):
@@ -99,11 +103,7 @@ class BeszelApiClient:
                 self._client.collection("system_details").get_full_list,
             )
         except ClientResponseError as err:
-            if err.status in (401, 403):
-                self._is_authenticated = False
-                raise BeszelApiAuthError(
-                    "Token likely expired, re-authentication needed"
-                ) from err
+            self._raise_if_unauthorised(err)
             if err.status == 404:
                 return {}
             raise
@@ -125,9 +125,5 @@ class BeszelApiClient:
             )
             return [vars(record) for record in records]
         except ClientResponseError as err:
-            if err.status in (401, 403):
-                self._is_authenticated = False
-                raise BeszelApiAuthError(
-                    "Token likely expired, re-authentication needed"
-                ) from err
+            self._raise_if_unauthorised(err)
             raise
