@@ -101,3 +101,12 @@ async def async_migrate_entry(hass, entry):
 async def async_unload_entry(hass, entry):
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_config_entry_device(hass, entry, device_entry):
+    """Allow removing devices for systems the Beszel Hub no longer reports."""
+    reported = {
+        (DOMAIN, f"{entry.entry_id}_{system_id}")
+        for system_id in entry.runtime_data.data
+    }
+    return reported.isdisjoint(device_entry.identifiers)

@@ -30,6 +30,7 @@ Requires Home Assistant 2026.9.4 or newer.
 - Multiple Beszel Hubs and systems without device or entity collisions.
 - Per-filesystem and temperature sensors with distinct identifiers for each metric.
 - Reauthentication and reconfiguration through Home Assistant.
+- Removal of devices for systems the Hub no longer reports.
 - Temporary connection failures and rate limits retry without prompting for credentials.
 - Translated entity names and enum states.
 

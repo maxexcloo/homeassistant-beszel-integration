@@ -8,7 +8,10 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.beszel import async_migrate_entry
+from custom_components.beszel import (
+    async_migrate_entry,
+    async_remove_config_entry_device,
+)
 from custom_components.beszel.const import DOMAIN
 
 
@@ -182,6 +185,17 @@ async def test_integration_setup_update_and_unload(hass):
         assert state("stats_cpu").state == "unknown"
         assert state("info_os").state == "unknown"
         assert coordinator._listeners
+
+        device_registry = dr.async_get(hass)
+        reported = device_registry.async_get_device_by_identifier(
+            (DOMAIN, f"{entry.entry_id}_system"), entry.entry_id
+        )
+        removed = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"{entry.entry_id}_removed")},
+        )
+        assert not await async_remove_config_entry_device(hass, entry, reported)
+        assert await async_remove_config_entry_device(hass, entry, removed)
 
         api.async_get_systems.return_value[0]["status"] = "down"
         api.async_get_latest_system_stats.side_effect = RuntimeError("stats failed")
