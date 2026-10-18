@@ -1,4 +1,47 @@
 # yaml-language-server: $schema=https://www.updatecli.io/schema/latest/policy/manifest/config.json
+name: Update Home Assistant Test Fixtures & Minimum
+pipelineid: update-home-assistant-test-fixtures-and-minimum
+labels:
+  group: python
+sources:
+  homeassistant:
+    dependson:
+      - phcc
+    kind: shell
+    spec:
+      command: curl -fsSL https://pypi.org/pypi/pytest-homeassistant-custom-component/{{ source "phcc" }}/json | jq -er '.info.requires_dist[] | select(startswith("homeassistant==")) | ltrimstr("homeassistant==")'
+      environments:
+        - name: PATH
+  phcc:
+    kind: pypi
+    spec:
+      name: pytest-homeassistant-custom-component
+      versionfilter:
+        kind: pep440
+        pattern: "*"
+targets:
+  hacs:
+    kind: json
+    sourceid: homeassistant
+    spec:
+      engine: dasel/v3
+      file: hacs.json
+      key: homeassistant
+  readme:
+    kind: file
+    sourceid: homeassistant
+    spec:
+      file: README.md
+      matchpattern: (Requires Home Assistant )[0-9.]+( or newer)
+      replacepattern: ${1}{{ source "homeassistant" }}${2}
+  test:
+    kind: file
+    sourceid: phcc
+    spec:
+      file: requirements-test.txt
+      matchpattern: (pytest-homeassistant-custom-component==)[0-9.]+
+      replacepattern: ${1}{{ source "phcc" }}
+---
 name: Update PocketBase
 pipelineid: update-pocketbase
 labels:
