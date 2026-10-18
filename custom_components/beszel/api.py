@@ -66,7 +66,7 @@ class BeszelApiClient:
                 1,
                 1,
                 query_params={
-                    "filter": f'system="{system_id}"',
+                    "filter": f'system="{system_id}" && type="1m"',
                     "sort": "-created",
                 },
             )
