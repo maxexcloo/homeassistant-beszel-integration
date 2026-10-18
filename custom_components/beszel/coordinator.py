@@ -47,16 +47,16 @@ def _merge_system_info(info, details):
 class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
     """Manages fetching data from the Beszel API."""
 
-    def __init__(self, hass, api_client, config_entry_id, update_interval_seconds):
+    def __init__(self, hass, api_client, config_entry, update_interval_seconds):
         """Initialise the data update coordinator."""
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=update_interval_seconds),
         )
         self.api_client = api_client
-        self.config_entry_id = config_entry_id
 
     async def _async_update_data(self):
         """Fetch data from API endpoint."""

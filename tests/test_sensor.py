@@ -17,7 +17,7 @@ class TestBeszelSensor:
     def test_sensor_discovery_uses_reported_values_and_scoped_ids(self):
         """Discovery omits missing rates and scopes identifiers."""
         coordinator = MagicMock()
-        coordinator.config_entry_id = "entry"
+        coordinator.config_entry.entry_id = "entry"
         coordinator.data = {
             "system": {
                 "id": "system",
@@ -49,7 +49,7 @@ class TestBeszelSensor:
     def test_malformed_nested_data_is_unavailable(self):
         """Null and malformed nested values do not interrupt discovery."""
         coordinator = MagicMock()
-        coordinator.config_entry_id = "entry"
+        coordinator.config_entry.entry_id = "entry"
         coordinator.data = {
             "system": {
                 "id": "system",
@@ -67,7 +67,7 @@ class TestBeszelSensor:
     def test_nested_sensors_keep_ids_metadata_and_live_values(self):
         """Filesystem and GPU discovery retain their distinct data and names."""
         coordinator = MagicMock()
-        coordinator.config_entry_id = "entry"
+        coordinator.config_entry.entry_id = "entry"
         stats = {
             "efs": {"data": {"d": 100, "du": 40}},
             "g": {"0": {"n": "Graphics", "u": 25}, "1": {"u": 0}},
@@ -93,7 +93,7 @@ class TestBeszelSensor:
     def test_data_rates_read_byte_counters(self):
         """Byte counters are converted to megabytes per second."""
         coordinator = MagicMock()
-        coordinator.config_entry_id = "entry"
+        coordinator.config_entry.entry_id = "entry"
         coordinator.data = {
             "system": {
                 "id": "system",
@@ -113,7 +113,7 @@ class TestBeszelSensor:
     def test_data_rates_fall_back_to_legacy_values(self):
         """Legacy MB/s values are used when byte counters are absent."""
         coordinator = MagicMock()
-        coordinator.config_entry_id = "entry"
+        coordinator.config_entry.entry_id = "entry"
         coordinator.data = {
             "system": {
                 "id": "system",
@@ -131,7 +131,7 @@ class TestBeszelSensor:
     def test_new_metrics_are_discovered_on_later_data(self):
         """A later coordinator snapshot exposes newly reported metrics."""
         coordinator = MagicMock()
-        coordinator.config_entry_id = "entry"
+        coordinator.config_entry.entry_id = "entry"
         coordinator.data = {
             "system": {
                 "id": "system",
@@ -155,7 +155,7 @@ class TestBeszelSensor:
     async def test_platform_adds_new_metrics_after_setup(self, hass):
         """The coordinator listener adds a metric that appears after setup."""
         coordinator = MagicMock()
-        coordinator.config_entry_id = "entry"
+        coordinator.config_entry.entry_id = "entry"
         coordinator.data = {
             "system": {
                 "id": "system",
@@ -165,9 +165,9 @@ class TestBeszelSensor:
                 "stats": {},
             }
         }
-        hass.data[DOMAIN] = {"entry": coordinator}
         entry = MockConfigEntry(domain=DOMAIN, entry_id="entry")
         entry.add_to_hass(hass)
+        entry.runtime_data = coordinator
         async_add_entities = MagicMock()
         await async_setup_entry(hass, entry, async_add_entities)
         initial_entities = async_add_entities.call_args.args[0]
@@ -190,7 +190,7 @@ class TestBeszelSensor:
     async def test_device_details_follow_system_changes(self, hass):
         """Coordinator updates refresh an existing device's Beszel metadata."""
         coordinator = MagicMock()
-        coordinator.config_entry_id = "entry"
+        coordinator.config_entry.entry_id = "entry"
         coordinator.data = {
             "system": {
                 "id": "system",
@@ -200,9 +200,9 @@ class TestBeszelSensor:
                 "stats": {},
             }
         }
-        hass.data[DOMAIN] = {"entry": coordinator}
         entry = MockConfigEntry(domain=DOMAIN, entry_id="entry")
         entry.add_to_hass(hass)
+        entry.runtime_data = coordinator
         await async_setup_entry(hass, entry, MagicMock())
         device = dr.async_get(hass).async_get_or_create(
             config_entry_id="entry",
@@ -231,7 +231,7 @@ class TestBeszelSensor:
 def test_missing_operating_system_is_none():
     """An existing OS sensor exposes missing and unrecognised values as None."""
     coordinator = MagicMock()
-    coordinator.config_entry_id = "entry"
+    coordinator.config_entry.entry_id = "entry"
     coordinator.data = {"system": {"info": {"os": 0}}}
     sensor = next(
         sensor

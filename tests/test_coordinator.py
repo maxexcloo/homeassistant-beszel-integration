@@ -2,8 +2,10 @@
 
 import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.api import BeszelApiAuthError
+from custom_components.beszel.const import DOMAIN
 from custom_components.beszel.coordinator import BeszelDataUpdateCoordinator
 
 
@@ -52,7 +54,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=DetailsFailureApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         coordinator.data = {
@@ -68,7 +70,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=FakeApiClient(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         coordinator.data = {
@@ -103,7 +105,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=AuthenticationFailureApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         with pytest.raises(ConfigEntryAuthFailed, match="beszel.local"):
@@ -122,7 +124,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=MissingStatisticsApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         data = await coordinator._async_update_data()
@@ -149,7 +151,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=DetailedApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         data = await coordinator._async_update_data()
@@ -178,7 +180,7 @@ class TestBeszelDataUpdateCoordinator:
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=DetailedApi(),
-            config_entry_id="entry",
+            config_entry=MockConfigEntry(domain=DOMAIN),
             update_interval_seconds=60,
         )
         data = await coordinator._async_update_data()

@@ -655,20 +655,20 @@ GPU_SENSOR_DESCRIPTIONS = (
 
 def _standard_unique_id(coordinator, system_id, description):
     return (
-        f"{DOMAIN}_{coordinator.config_entry_id}_{system_id}_"
+        f"{DOMAIN}_{coordinator.config_entry.entry_id}_{system_id}_"
         f"{description.data_source}_{description.key}"
     )
 
 
 def _nested_unique_id(coordinator, system_id, parent_key, item_key, api_key):
     return (
-        f"{DOMAIN}_{coordinator.config_entry_id}_{system_id}_stats_"
+        f"{DOMAIN}_{coordinator.config_entry.entry_id}_{system_id}_stats_"
         f"{parent_key}_{item_key}_{api_key}"
     )
 
 
 def _temperature_unique_id(coordinator, system_id, temperature_key):
-    return f"{DOMAIN}_{coordinator.config_entry_id}_{system_id}_temperature_{temperature_key}"
+    return f"{DOMAIN}_{coordinator.config_entry.entry_id}_{system_id}_temperature_{temperature_key}"
 
 
 def _create_available_sensors(coordinator, known_unique_ids=None):
@@ -745,7 +745,7 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Beszel sensor entities based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     device_registry = dr.async_get(hass)
     known_unique_ids = set()
 
@@ -808,7 +808,7 @@ class BeszelCoordinatorSensor(CoordinatorEntity, SensorEntity):
         details = _device_details(self._system_id, self.system_data)
         device_info = {
             "identifiers": {
-                (DOMAIN, f"{self.coordinator.config_entry_id}_{self._system_id}")
+                (DOMAIN, f"{self.coordinator.config_entry.entry_id}_{self._system_id}")
             },
             "manufacturer": "Beszel",
             "name": details["name"],

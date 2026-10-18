@@ -142,7 +142,7 @@ async def test_integration_setup_update_and_unload(hass):
         )
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
-        coordinator = hass.data[DOMAIN][entry.entry_id]
+        coordinator = entry.runtime_data
         assert entry.version == 3
         assert registry.async_get(temperature.entity_id).unique_id == (
             f"{prefix}_temperature_cpu_thermal"
@@ -179,6 +179,5 @@ async def test_integration_setup_update_and_unload(hass):
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
-        assert entry.entry_id not in hass.data[DOMAIN]
         assert not coordinator._listeners
         assert state("stats_cpu").state == "unavailable"
