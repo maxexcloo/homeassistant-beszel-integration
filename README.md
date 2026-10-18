@@ -6,7 +6,7 @@
 Monitor Beszel systems in Home Assistant with automatically discovered
 sensors for hardware, operating system, storage, and network statistics.
 
-Requires Home Assistant 2026.9.4 or newer.
+Requires Home Assistant 2026.10.2 or newer.
 
 ## Quick Start
 
