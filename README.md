@@ -8,14 +8,6 @@ sensors for hardware, operating system, storage, and network statistics.
 
 Requires Home Assistant 2026.10.2 or newer.
 
-## Quick Start
-
-1. Add `https://github.com/maxexcloo/homeassistant-beszel-integration` as an
-   Integration custom repository in HACS.
-2. Install **Beszel** and restart Home Assistant.
-3. Open **Settings → Devices & Services → Add Integration**.
-4. Search for **Beszel** and enter the Hub URL, username, and password.
-
 ## Features
 
 - Battery level and charging state.
@@ -58,7 +50,8 @@ Restart Home Assistant after copying the files.
 
 ### Configuration
 
-Enter the following values when adding the integration:
+Open **Settings → Devices & Services → Add Integration**, search for **Beszel**,
+and enter:
 
 - **Host**: The Beszel Hub URL, such as `http://192.168.1.100:8090`.
 - **Username**: The Hub username or email address.
