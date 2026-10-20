@@ -3,8 +3,8 @@
 [![Check](https://github.com/maxexcloo/homeassistant-beszel-integration/actions/workflows/check.yaml/badge.svg)](https://github.com/maxexcloo/homeassistant-beszel-integration/actions/workflows/check.yaml)
 [![Licence](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 
-Monitor Beszel systems in Home Assistant with automatically discovered
-sensors for hardware, operating system, storage, and network statistics.
+Monitor Beszel systems in Home Assistant. Sensors for hardware, operating
+system, storage and network statistics are discovered automatically.
 
 Requires Home Assistant 2026.10.2 or newer.
 
@@ -57,17 +57,16 @@ and enter:
 - **Username**: The Hub username or email address.
 - **Password**: The Hub password.
 
-Home Assistant creates sensors only when Beszel reports the corresponding data.
-Existing temperature entities are migrated automatically, preserving their entity
-IDs and customisations.
-New systems and metrics are discovered during later updates without reloading the
-integration. Missing measurements remain unavailable rather than being reported as
-zero. If one system temporarily fails while the Hub remains reachable, its cached
-metrics are retained until a later successful update.
+Home Assistant only creates a sensor when Beszel reports data for it. Existing
+temperature entities are migrated automatically and keep their entity IDs and
+customisations. New systems and metrics are picked up during later updates
+without reloading the integration. Missing measurements show as unavailable, not
+zero. If one system briefly fails while the Hub is still reachable, its cached
+metrics stay until the next successful update.
 
-To expose additional disks, configure the Beszel agent using the
+To add more disks, configure the Beszel agent using the
 [additional disks guide](https://beszel.dev/guide/additional-disks). Each reported
-filesystem receives its own capacity, throughput, and I/O sensors.
+filesystem gets its own capacity, throughput and I/O sensors.
 
 Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication
@@ -89,10 +88,10 @@ before running local Mise tasks.
 
 5. Submit a pull request with tests and documentation for behavioural changes.
 
-Run `mise run test:python` to run tests separately. The test task uses uv to
-provision an isolated Python 3.14 environment with Home Assistant and its
-custom-component pytest fixtures. External API calls remain mocked. GitHub CI
-also runs HACS and Hassfest validation.
+Run `mise run test:python` to run just the tests. The test task uses uv to set up
+an isolated Python 3.14 environment with Home Assistant and its custom-component
+pytest fixtures. External API calls are mocked. GitHub CI also runs HACS and
+Hassfest validation.
 
 ## Licence
 
