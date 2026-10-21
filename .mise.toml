@@ -3,13 +3,15 @@
 depends = [
   "check:actions",
   "check:mise",
+  "check:oxfmt",
   "check:python",
   "check:updates",
+  "check:whitespace",
   "test:python",
 ]
 
 [tasks.fmt]
-depends = ["fmt:mise", "fmt:python"]
+depends = ["fmt:mise", "fmt:oxfmt", "fmt:python"]
 
 # Match the Python version supported by Home Assistant's pinned test dependencies.
 [tasks."test:python"]
