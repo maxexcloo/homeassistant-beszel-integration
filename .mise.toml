@@ -14,5 +14,6 @@ depends = [
 depends = ["fmt:mise", "fmt:oxfmt", "fmt:python"]
 
 # Match the Python version supported by Home Assistant's pinned test dependencies.
+# Install the integration's runtime requirements from its manifest.
 [tasks."test:python"]
-run = "uv run --no-project --python 3.14 --with-requirements requirements-test.txt python -B -m pytest"
+run = "uv run --no-project --python 3.14 --with-requirements requirements-test.txt $(jq -r '.requirements[] | \"--with=\" + .' custom_components/*/manifest.json) python -B -m pytest"
