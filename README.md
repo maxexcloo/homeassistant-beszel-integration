@@ -67,6 +67,8 @@ metrics stay until the next successful update.
 To add more disks, configure the Beszel agent using the
 [additional disks guide](https://beszel.dev/guide/additional-disks). Each reported
 filesystem gets its own capacity, throughput and I/O sensors.
+Filesystem throughput uses current byte-rate fields when available and supports
+older Hub measurements without changing existing entity IDs.
 
 Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication

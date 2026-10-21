@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.const import UnitOfTime
 from homeassistant.helpers import device_registry as dr
@@ -13,6 +14,34 @@ from custom_components.beszel.sensor import _create_available_sensors, async_set
 
 class TestBeszelSensor:
     """Exercise Beszel sensor discovery behaviour."""
+
+    @pytest.mark.parametrize(
+        ("metrics", "expected"),
+        [
+            ({"rb": 1048576, "wb": 524288}, (1, 0.5)),
+            ({"rb": 0, "wb": 0, "r": 1, "w": 2}, (0, 0)),
+            ({"r": 1.5, "w": 2.5}, (1.5, 2.5)),
+            ({"rb": None, "wb": "invalid", "r": 1, "w": 2}, (1, 2)),
+        ],
+    )
+    def test_filesystem_rates_support_current_and_legacy_hubs(self, metrics, expected):
+        """Native byte rates retain legacy entity IDs and unavailable values."""
+        coordinator = MagicMock()
+        coordinator.config_entry.entry_id = "entry"
+        coordinator.data = {"system": {"stats": {"efs": {"data": metrics}}}}
+        by_id = {
+            sensor.unique_id: sensor
+            for sensor in _create_available_sensors(coordinator)
+        }
+        read = by_id["beszel_entry_system_stats_efs_data_r"]
+        write = by_id["beszel_entry_system_stats_efs_data_w"]
+        assert (read.native_value, write.native_value) == expected
+        metrics.clear()
+        assert read.native_value is None
+        assert write.native_value is None
+        assert read.unique_id not in {
+            sensor.unique_id for sensor in _create_available_sensors(coordinator)
+        }
 
     def test_sensor_discovery_uses_reported_values_and_scoped_ids(self):
         """Discovery omits missing rates and scopes identifiers."""

@@ -39,9 +39,11 @@ from .const import (
     ATTR_EXTRA_FS,
     ATTR_FS_DISK_IO_STATS,
     ATTR_FS_DISK_PERCENT,
+    ATTR_FS_DISK_READ_BYTES,
     ATTR_FS_DISK_READ_PS_MB,
     ATTR_FS_DISK_TOTAL_GB,
     ATTR_FS_DISK_USED_GB,
+    ATTR_FS_DISK_WRITE_BYTES,
     ATTR_FS_DISK_WRITE_PS_MB,
     ATTR_GPU_DATA,
     ATTR_GPU_MEM_TOTAL_MB,
@@ -103,14 +105,16 @@ def _array_value(data, key, index, precision=2):
 
 def _data_rate_megabytes(data, byte_key, index, legacy_key):
     """Return MB/s from a byte counter with a legacy MB/s fallback."""
-    values = data.get(byte_key)
-    if (
-        isinstance(values, (list, tuple))
-        and len(values) > index
-        and values[index] is not None
-    ):
+    value = data.get(byte_key)
+    if index is not None:
+        value = (
+            value[index]
+            if isinstance(value, (list, tuple)) and len(value) > index
+            else None
+        )
+    if value is not None:
         try:
-            return round(float(values[index]) / (1024 * 1024), 2)
+            return round(float(value) / (1024 * 1024), 2)
         except TypeError, ValueError:
             pass
     legacy = data.get(legacy_key)
@@ -483,6 +487,9 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _data_rate_megabytes(
+            data, ATTR_FS_DISK_READ_BYTES, None, ATTR_FS_DISK_READ_PS_MB
+        ),
     ),
     BeszelSensorDescription(
         key="read_time_percent",
@@ -535,6 +542,9 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _data_rate_megabytes(
+            data, ATTR_FS_DISK_WRITE_BYTES, None, ATTR_FS_DISK_WRITE_PS_MB
+        ),
     ),
     BeszelSensorDescription(
         key="write_time_percent",
