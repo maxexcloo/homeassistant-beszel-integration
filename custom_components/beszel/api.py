@@ -104,8 +104,6 @@ class BeszelApiClient:
             )
         except ClientResponseError as err:
             self._raise_if_unauthorised(err)
-            if err.status == 404:
-                return {}
             raise
         details = {}
         for record in records:

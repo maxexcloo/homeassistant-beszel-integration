@@ -105,27 +105,21 @@ def _array_value(data, key, index, precision=2):
         return None
 
 
-def _data_rate_megabytes(data, byte_key, index, legacy_key):
-    """Return MB/s from a byte counter with a legacy MB/s fallback."""
-    value = data.get(byte_key)
+def _data_rate_megabytes(data, key, index=None):
+    """Return MB/s from a Beszel byte rate."""
+    value = data.get(key)
     if index is not None:
         value = (
             value[index]
             if isinstance(value, (list, tuple)) and len(value) > index
             else None
         )
-    if value is not None:
-        try:
-            return round(float(value) / 1_000_000, 2)
-        except TypeError, ValueError:
-            pass
-    legacy = data.get(legacy_key)
-    if legacy is not None:
-        try:
-            return round(float(legacy) * 1024**2 / 1_000_000, 2)
-        except TypeError, ValueError:
-            return None
-    return None
+    if value is None:
+        return None
+    try:
+        return round(float(value) / 1_000_000, 2)
+    except TypeError, ValueError:
+        return None
 
 
 def _battery_percent(data):
@@ -332,9 +326,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(
-            data, ATTR_DISK_IO, 0, ATTR_DISK_READ_PS_MB
-        ),
+        value_fn=lambda data: _data_rate_megabytes(data, ATTR_DISK_IO, 0),
     ),
     BeszelSensorDescription(
         key="disk_read_time_percent",
@@ -384,9 +376,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(
-            data, ATTR_DISK_IO, 1, ATTR_DISK_WRITE_PS_MB
-        ),
+        value_fn=lambda data: _data_rate_megabytes(data, ATTR_DISK_IO, 1),
     ),
     BeszelSensorDescription(
         key="disk_write_time_percent",
@@ -435,9 +425,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(
-            data, ATTR_BANDWIDTH, 1, ATTR_NET_RECV_PS_MB
-        ),
+        value_fn=lambda data: _data_rate_megabytes(data, ATTR_BANDWIDTH, 1),
     ),
     BeszelSensorDescription(
         key=ATTR_NET_SENT_PS_MB,
@@ -445,9 +433,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(
-            data, ATTR_BANDWIDTH, 0, ATTR_NET_SENT_PS_MB
-        ),
+        value_fn=lambda data: _data_rate_megabytes(data, ATTR_BANDWIDTH, 0),
     ),
     BeszelSensorDescription(
         key="status",
@@ -503,9 +489,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(
-            data, ATTR_FS_DISK_READ_BYTES, None, ATTR_FS_DISK_READ_PS_MB
-        ),
+        value_fn=lambda data: _data_rate_megabytes(data, ATTR_FS_DISK_READ_BYTES),
     ),
     BeszelSensorDescription(
         key="read_time_percent",
@@ -558,9 +542,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(
-            data, ATTR_FS_DISK_WRITE_BYTES, None, ATTR_FS_DISK_WRITE_PS_MB
-        ),
+        value_fn=lambda data: _data_rate_megabytes(data, ATTR_FS_DISK_WRITE_BYTES),
     ),
     BeszelSensorDescription(
         key="write_time_percent",

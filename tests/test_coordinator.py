@@ -164,29 +164,3 @@ class TestBeszelDataUpdateCoordinator:
         assert data["system"]["info"]["m"] == "ARM Cortex-A76"
         assert data["system"]["info"]["k"] == "6.1.0-rpi8"
         assert data["system"]["info"]["os"] == 0
-
-    async def test_info_fields_are_not_overridden_by_details(self, hass):
-        """Existing info values win over the static details fallback."""
-
-        class DetailedApi(FakeApiClient):
-            async def async_get_systems(self):
-                return [
-                    {
-                        "id": "system",
-                        "name": "Server",
-                        "status": "up",
-                        "info": {"k": "legacy-kernel"},
-                    }
-                ]
-
-            async def async_get_system_details(self):
-                return {"system": {"kernel": "new-kernel"}}
-
-        coordinator = BeszelDataUpdateCoordinator(
-            hass,
-            api_client=DetailedApi(),
-            config_entry=MockConfigEntry(domain=DOMAIN),
-            update_interval_seconds=60,
-        )
-        data = await coordinator._async_update_data()
-        assert data["system"]["info"]["k"] == "legacy-kernel"

@@ -162,20 +162,6 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(result), {"one", "two"})
         self.assertEqual(result["one"]["kernel"], "6.1")
 
-    async def test_missing_system_details_collection_is_tolerated(self):
-        """Hubs without a system_details collection return no details."""
-        collection = MagicMock()
-        collection.get_full_list.side_effect = ClientResponseError(status=404)
-        pocketbase = MagicMock()
-        pocketbase.collection.return_value = collection
-
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            client.async_authenticate = AsyncMock()
-            result = await client.async_get_system_details()
-
-        self.assertEqual(result, {})
-
     async def test_statistics_requests_reuse_valid_authentication(self):
         """Request methods authenticate once and reuse a still-valid session."""
         authentication = MagicMock()

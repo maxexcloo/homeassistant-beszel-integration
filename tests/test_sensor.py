@@ -78,12 +78,10 @@ class TestBeszelSensor:
         [
             ({"rb": 1048576, "wb": 524288}, (1.05, 0.52)),
             ({"rb": 0, "wb": 0, "r": 1, "w": 2}, (0, 0)),
-            ({"r": 1.5, "w": 2.5}, (1.57, 2.62)),
-            ({"rb": None, "wb": "invalid", "r": 1, "w": 2}, (1.05, 2.1)),
         ],
     )
-    def test_filesystem_rates_support_current_and_legacy_hubs(self, metrics, expected):
-        """Native byte rates retain legacy entity IDs and unavailable values."""
+    def test_filesystem_rates_read_byte_counters(self, metrics, expected):
+        """Byte rates keep the existing entity IDs and unavailable values."""
         coordinator = MagicMock()
         coordinator.config_entry.entry_id = "entry"
         coordinator.data = {"system": {"stats": {"efs": {"data": metrics}}}}
@@ -200,24 +198,6 @@ class TestBeszelSensor:
         assert by_id["beszel_entry_system_stats_dr"].native_value == 0.52
         assert by_id["beszel_entry_system_stats_dw"].native_value == 0.26
 
-    def test_data_rates_fall_back_to_legacy_values(self):
-        """Legacy MB/s values are used when byte counters are absent."""
-        coordinator = MagicMock()
-        coordinator.config_entry.entry_id = "entry"
-        coordinator.data = {
-            "system": {
-                "id": "system",
-                "name": "Server",
-                "status": "up",
-                "info": {},
-                "stats": {"nr": 1.5, "ns": 2.5},
-            }
-        }
-        sensors = _create_available_sensors(coordinator)
-        by_id = {sensor.unique_id: sensor for sensor in sensors}
-        assert by_id["beszel_entry_system_stats_ns"].native_value == 2.62
-        assert by_id["beszel_entry_system_stats_nr"].native_value == 1.57
-
     def test_new_metrics_are_discovered_on_later_data(self):
         """A later coordinator snapshot exposes newly reported metrics."""
         coordinator = MagicMock()
@@ -234,7 +214,10 @@ class TestBeszelSensor:
         initial_ids = {
             sensor.unique_id for sensor in _create_available_sensors(coordinator)
         }
-        coordinator.data["system"]["stats"] = {"dr": 1.5, "dios": [1, 2, 3, 4, 5, 6]}
+        coordinator.data["system"]["stats"] = {
+            "dio": [1, 2],
+            "dios": [1, 2, 3, 4, 5, 6],
+        }
         later_ids = {
             sensor.unique_id for sensor in _create_available_sensors(coordinator)
         }

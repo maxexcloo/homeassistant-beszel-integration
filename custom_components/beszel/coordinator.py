@@ -18,7 +18,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Beszel system_details fields mapped onto their legacy system info keys.
+# Beszel system_details fields mapped onto the info keys used in entity IDs.
 _DETAILS_TO_INFO = {
     "cores": ATTR_CORES,
     "cpu": ATTR_CPU_MODEL,
@@ -29,13 +29,14 @@ _DETAILS_TO_INFO = {
 
 def _merge_system_info(info, details):
     """Merge static Beszel details into a system info mapping."""
-    merged = dict(info or {})
-    for detail_key, info_key in _DETAILS_TO_INFO.items():
-        if info_key in merged:
-            continue
-        value = details.get(detail_key)
-        if value is not None and value != "":
-            merged[info_key] = value
+    merged = {
+        **(info or {}),
+        **{
+            info_key: details[detail_key]
+            for detail_key, info_key in _DETAILS_TO_INFO.items()
+            if details.get(detail_key) not in (None, "")
+        },
+    }
     return merged or None
 
 
