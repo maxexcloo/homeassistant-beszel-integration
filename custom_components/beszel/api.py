@@ -30,7 +30,6 @@ class BeszelApiClient:
         host = normalise_host(host)
         self._client = PocketBase(host)
         self._host = host
-        self._is_authenticated = False
         self._password = password
         self._username = username
 
@@ -41,12 +40,8 @@ class BeszelApiClient:
 
     async def async_authenticate(self):
         """Authenticate with the Beszel Hub."""
-        if (
-            self._is_authenticated
-            and self._client.auth_store.token
-            and self._client.auth_store.model
-            and validate_token(self._client.auth_store.token)
-        ):
+        token = self._client.auth_store.token
+        if token and validate_token(token):
             return
 
         last_error = None
@@ -57,20 +52,18 @@ class BeszelApiClient:
                     self._username,
                     self._password,
                 )
-                self._is_authenticated = True
                 return
             except ClientResponseError as err:
                 if err.status not in (400, 401, 403, 404):
                     raise
                 last_error = err
 
-        self._is_authenticated = False
         raise BeszelApiAuthError("Authentication failed") from last_error
 
     def _raise_if_unauthorised(self, err):
         """Raise an authentication error when the Hub rejects the session."""
         if err.status in (401, 403):
-            self._is_authenticated = False
+            self._client.auth_store.clear()
             raise BeszelApiAuthError(
                 "Token likely expired, re-authentication needed"
             ) from err

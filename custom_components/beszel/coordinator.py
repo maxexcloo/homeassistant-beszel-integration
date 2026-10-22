@@ -43,14 +43,14 @@ def _merge_system_info(info, details):
 class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
     """Manages fetching data from the Beszel API."""
 
-    def __init__(self, hass, api_client, config_entry, update_interval_seconds):
+    def __init__(self, hass, api_client, config_entry):
         """Initialise the data update coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             config_entry=config_entry,
             name=DOMAIN,
-            update_interval=timedelta(seconds=update_interval_seconds),
+            update_interval=timedelta(seconds=60),
         )
         self._details = {}
         self.api_client = api_client
@@ -63,57 +63,43 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("No systems found on Beszel Hub %s", self.api_client.host)
                 return {}
 
+            details = await self._fetch_system_details()
+            records = await asyncio.gather(
+                *(
+                    self.api_client.async_get_latest_system_stats(system["id"])
+                    for system in systems
+                ),
+                return_exceptions=True,
+            )
+
             all_system_data = {}
-            systems_with_ids = []
-            for system in systems:
-                if system.get("id"):
-                    systems_with_ids.append(system)
-                    continue
-                _LOGGER.warning(
-                    "Ignoring system without an ID from Beszel Hub %s: %r",
-                    self.api_client.host,
-                    system,
-                )
-            details_map = await self._fetch_system_details()
-            tasks = [
-                self._fetch_individual_system_data(
-                    system, details_map.get(system["id"], {})
-                )
-                for system in systems_with_ids
-            ]
-
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            for system, result in zip(systems_with_ids, results, strict=True):
+            for system, record in zip(systems, records, strict=True):
                 system_id = system["id"]
-                if isinstance(result, asyncio.CancelledError):
-                    raise result
-                if isinstance(result, BeszelApiAuthError):
-                    raise result
-                if isinstance(result, Exception):
+                name = system.get("name", system_id)
+                if isinstance(record, (asyncio.CancelledError, BeszelApiAuthError)):
+                    raise record
+                if isinstance(record, Exception):
                     _LOGGER.error(
                         "Error fetching data from Beszel Hub %s for system %s (%s): %s",
                         self.api_client.host,
-                        system.get("name", system_id),
+                        name,
                         system_id,
-                        result,
+                        record,
                     )
-                    cached_data = (self.data or {}).get(system_id, {})
-                    info = _merge_system_info(
-                        system.get("info"), details_map.get(system_id, {})
-                    )
-                    if info is None:
-                        info = cached_data.get("info")
-                    all_system_data[system_id] = {
-                        **cached_data,
-                        "id": system_id,
-                        "info": info,
-                        "name": system.get("name", system_id),
-                        "stats": cached_data.get("stats"),
-                        "status": system.get("status", "unknown"),
+                    cached = (self.data or {}).get(system_id, {})
+                    record = {
+                        "created": cached.get("stats_created"),
+                        "stats": cached.get("stats"),
                     }
-                else:
-                    all_system_data[system_id] = result
+                all_system_data[system_id] = {
+                    "info": _merge_system_info(
+                        system.get("info"), details.get(system_id, {})
+                    ),
+                    "name": name,
+                    "stats": record.get("stats") if record else None,
+                    "stats_created": record.get("created") if record else None,
+                    "status": system.get("status", "unknown"),
+                }
 
             return all_system_data
 
@@ -139,17 +125,3 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 err,
             )
         return self._details
-
-    async def _fetch_individual_system_data(self, system, details):
-        """Fetch stats and 'info' for a single system."""
-        system_id = system["id"]
-        record = await self.api_client.async_get_latest_system_stats(system_id)
-
-        return {
-            "id": system_id,
-            "name": system.get("name", system_id),
-            "status": system.get("status", "unknown"),
-            "info": _merge_system_info(system.get("info"), details),
-            "stats": record.get("stats") if record else None,
-            "stats_created": record.get("created") if record else None,
-        }

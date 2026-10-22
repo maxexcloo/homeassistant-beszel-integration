@@ -91,59 +91,40 @@ class BeszelSensorDescription(SensorEntityDescription):
     value_fn: ValueFunction | None = None
 
 
-def _array_value(data, key, index, precision=2):
-    """Return a rounded value from a Beszel array metric."""
+# Percentages are rounded; Beszel's binary capacities keep the existing decimal units.
+_UNIT_SCALES = {
+    PERCENTAGE: 1,
+    UnitOfInformation.GIGABYTES: 1024**3 / 1_000_000_000,
+    UnitOfInformation.MEGABYTES: 1024**2 / 1_000_000,
+}
+
+
+def _number(value):
+    """Return a float, or None for a missing or malformed Beszel value."""
+    try:
+        return float(value)
+    except TypeError, ValueError:
+        return None
+
+
+def _rounded(value, precision=2):
+    """Return a rounded number, or None for a missing or malformed value."""
+    number = _number(value)
+    return None if number is None else round(number, precision)
+
+
+def _array_item(data, key, index):
+    """Return an item from a Beszel array metric."""
     values = data.get(key)
-    if not isinstance(values, (list, tuple)) or len(values) <= index:
-        return None
-    value = values[index]
-    if value is None:
-        return None
-    try:
-        return round(float(value), precision)
-    except TypeError, ValueError:
-        return None
+    if isinstance(values, (list, tuple)) and len(values) > index:
+        return values[index]
+    return None
 
 
-def _data_rate_megabytes(data, key, index=None):
+def _megabytes_per_second(value):
     """Return MB/s from a Beszel byte rate."""
-    value = data.get(key)
-    if index is not None:
-        value = (
-            value[index]
-            if isinstance(value, (list, tuple)) and len(value) > index
-            else None
-        )
-    if value is None:
-        return None
-    try:
-        return round(float(value) / 1_000_000, 2)
-    except TypeError, ValueError:
-        return None
-
-
-def _battery_percent(data):
-    """Return the Beszel battery percentage."""
-    if not _has_battery(data):
-        return None
-    value = _array_value(data, ATTR_BATTERY, 0, precision=0)
-    return int(value) if value is not None else None
-
-
-def _battery_state(data):
-    """Return the Beszel battery charge state."""
-    if not _has_battery(data):
-        return None
-    states = {
-        0: "unknown",
-        1: "empty",
-        2: "full",
-        3: "charging",
-        4: "discharging",
-        5: "idle",
-    }
-    value = _array_value(data, ATTR_BATTERY, 1, precision=0)
-    return states.get(int(value), "unknown") if value is not None else None
+    number = _number(value)
+    return None if number is None else round(number / 1_000_000, 2)
 
 
 def _has_battery(data):
@@ -156,54 +137,57 @@ def _has_battery(data):
     )
 
 
+def _battery_percent(data):
+    """Return the Beszel battery percentage."""
+    value = _number(_array_item(data, ATTR_BATTERY, 0))
+    return round(value) if value is not None and _has_battery(data) else None
+
+
+def _battery_state(data):
+    """Return the Beszel battery charge state."""
+    states = {
+        0: "unknown",
+        1: "empty",
+        2: "full",
+        3: "charging",
+        4: "discharging",
+        5: "idle",
+    }
+    value = _number(_array_item(data, ATTR_BATTERY, 1))
+    if value is None or not _has_battery(data):
+        return None
+    return states.get(round(value), "unknown")
+
+
 def _used_percent(data, total_key, used_key):
     """Return a percentage only when both source values are reported."""
-    total = data.get(total_key)
-    used = data.get(used_key)
+    total = _number(data.get(total_key))
+    used = _number(data.get(used_key))
     if total is None or used is None:
         return None
-    try:
-        numeric_total = float(total)
-        return round((float(used) / numeric_total) * 100, 2) if numeric_total else 0
-    except TypeError, ValueError:
-        return None
+    return round(used / total * 100, 2) if total else 0
 
 
 def _normalise_value(value, native_unit):
     """Normalise values whose Home Assistant representation is constrained."""
-    if value is not None and native_unit == PERCENTAGE:
-        try:
-            return round(float(value), 2)
-        except TypeError, ValueError:
-            return None
-    if value is not None and native_unit in {
-        UnitOfInformation.GIGABYTES,
-        UnitOfInformation.MEGABYTES,
-    }:
-        # Beszel reports binary quantities; existing entity units remain decimal.
-        factor = (
-            1024**3 / 1_000_000_000
-            if native_unit == UnitOfInformation.GIGABYTES
-            else 1024**2 / 1_000_000
-        )
-        try:
-            return round(float(value) * factor, 2)
-        except TypeError, ValueError:
-            return None
-    return value
+    if native_unit not in _UNIT_SCALES:
+        return value
+    number = _number(value)
+    return None if number is None else round(number * _UNIT_SCALES[native_unit], 2)
 
 
-def _uptime_value(value):
+def _uptime_value(data):
     """Return a valid duration from a Beszel uptime value."""
-    if value is None:
+    seconds = _number(data.get(ATTR_UPTIME))
+    if seconds is None or seconds < 0:
         return None
-    try:
-        total_seconds = float(value)
-    except TypeError, ValueError:
-        return None
-    if total_seconds < 0:
-        return None
-    return int(total_seconds) if total_seconds.is_integer() else total_seconds
+    return int(seconds) if seconds.is_integer() else seconds
+
+
+def _temperature_value(system_data, key):
+    """Return a Beszel temperature in degrees Celsius."""
+    temperatures = mapping(mapping(system_data.get("stats")).get(ATTR_TEMPERATURES))
+    return _rounded(temperatures.get(key), 1)
 
 
 def _standard_value(system_data, description):
@@ -215,13 +199,9 @@ def _standard_value(system_data, description):
     data = mapping(system_data.get(description.data_source))
     if description.value_fn:
         return description.value_fn(data)
-
-    value = data.get(description.key)
-    if description.key == ATTR_OS and description.data_source == "info":
-        return os_name(value)
-    if description.key == ATTR_UPTIME and description.data_source == "info":
-        return _uptime_value(value)
-    return _normalise_value(value, description.native_unit_of_measurement)
+    return _normalise_value(
+        data.get(description.key), description.native_unit_of_measurement
+    )
 
 
 def _nested_value(system_data, parent_key, item_key, description):
@@ -272,6 +252,7 @@ INFO_SENSOR_DESCRIPTIONS = (
         translation_key="operating_system",
         data_source="info",
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: os_name(data.get(ATTR_OS)),
     ),
     BeszelSensorDescription(
         key=ATTR_UPTIME,
@@ -280,6 +261,7 @@ INFO_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DURATION,
         entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=UnitOfTime.SECONDS,
+        value_fn=_uptime_value,
     ),
 )
 
@@ -310,7 +292,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         translation_key="disk_io_utilisation",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_DISK_IO_STATS, 2),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 2)),
     ),
     BeszelSensorDescription(
         key="disk_read_await_ms",
@@ -318,7 +300,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_DISK_IO_STATS, 3),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 3)),
     ),
     BeszelSensorDescription(
         key=ATTR_DISK_READ_PS_MB,
@@ -326,14 +308,14 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(data, ATTR_DISK_IO, 0),
+        value_fn=lambda data: _megabytes_per_second(_array_item(data, ATTR_DISK_IO, 0)),
     ),
     BeszelSensorDescription(
         key="disk_read_time_percent",
         translation_key="disk_read_time",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_DISK_IO_STATS, 0),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 0)),
     ),
     BeszelSensorDescription(
         key=ATTR_DISK_TOTAL_GB,
@@ -360,7 +342,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         translation_key="disk_weighted_io",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_DISK_IO_STATS, 5),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 5)),
     ),
     BeszelSensorDescription(
         key="disk_write_await_ms",
@@ -368,7 +350,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_DISK_IO_STATS, 4),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 4)),
     ),
     BeszelSensorDescription(
         key=ATTR_DISK_WRITE_PS_MB,
@@ -376,14 +358,14 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(data, ATTR_DISK_IO, 1),
+        value_fn=lambda data: _megabytes_per_second(_array_item(data, ATTR_DISK_IO, 1)),
     ),
     BeszelSensorDescription(
         key="disk_write_time_percent",
         translation_key="disk_write_time",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_DISK_IO_STATS, 1),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 1)),
     ),
     BeszelSensorDescription(
         key=ATTR_MEM_BUFF_CACHE_GB,
@@ -425,7 +407,9 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(data, ATTR_BANDWIDTH, 1),
+        value_fn=lambda data: _megabytes_per_second(
+            _array_item(data, ATTR_BANDWIDTH, 1)
+        ),
     ),
     BeszelSensorDescription(
         key=ATTR_NET_SENT_PS_MB,
@@ -433,7 +417,9 @@ STATS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(data, ATTR_BANDWIDTH, 0),
+        value_fn=lambda data: _megabytes_per_second(
+            _array_item(data, ATTR_BANDWIDTH, 0)
+        ),
     ),
     BeszelSensorDescription(
         key="status",
@@ -473,7 +459,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         translation_key="filesystem_io_utilisation",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_FS_DISK_IO_STATS, 2),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 2)),
     ),
     BeszelSensorDescription(
         key="read_await_ms",
@@ -481,7 +467,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_FS_DISK_IO_STATS, 3),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 3)),
     ),
     BeszelSensorDescription(
         key=ATTR_FS_DISK_READ_PS_MB,
@@ -489,14 +475,14 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(data, ATTR_FS_DISK_READ_BYTES),
+        value_fn=lambda data: _megabytes_per_second(data.get(ATTR_FS_DISK_READ_BYTES)),
     ),
     BeszelSensorDescription(
         key="read_time_percent",
         translation_key="filesystem_read_time",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_FS_DISK_IO_STATS, 0),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 0)),
     ),
     BeszelSensorDescription(
         key=ATTR_FS_DISK_TOTAL_GB,
@@ -526,7 +512,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         translation_key="filesystem_weighted_io",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_FS_DISK_IO_STATS, 5),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 5)),
     ),
     BeszelSensorDescription(
         key="write_await_ms",
@@ -534,7 +520,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_FS_DISK_IO_STATS, 4),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 4)),
     ),
     BeszelSensorDescription(
         key=ATTR_FS_DISK_WRITE_PS_MB,
@@ -542,14 +528,14 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABYTES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _data_rate_megabytes(data, ATTR_FS_DISK_WRITE_BYTES),
+        value_fn=lambda data: _megabytes_per_second(data.get(ATTR_FS_DISK_WRITE_BYTES)),
     ),
     BeszelSensorDescription(
         key="write_time_percent",
         translation_key="filesystem_write_time",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _array_value(data, ATTR_FS_DISK_IO_STATS, 1),
+        value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 1)),
     ),
 )
 
@@ -672,12 +658,7 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
             unique_id = _temperature_unique_id(coordinator, system_id, temperature_name)
             if unique_id in known_unique_ids:
                 continue
-            value = temperatures.get(temperature_name)
-            try:
-                value = round(float(value), 1) if value is not None else None
-            except TypeError, ValueError:
-                value = None
-            if value is None:
+            if _temperature_value(system_data, temperature_name) is None:
                 continue
             sensor = BeszelTemperatureSensor(coordinator, system_id, temperature_name)
             entities.append(sensor)
@@ -840,12 +821,4 @@ class BeszelTemperatureSensor(BeszelCoordinatorSensor):
     @property
     def native_value(self):
         """Return the state of the sensor."""
-        stats = mapping(self.system_data.get("stats"))
-        temperatures = mapping(stats.get(ATTR_TEMPERATURES))
-        value = temperatures.get(self._temperature_key)
-        if value is None:
-            return None
-        try:
-            return round(float(value), 1)
-        except TypeError, ValueError:
-            return None
+        return _temperature_value(self.system_data, self._temperature_key)

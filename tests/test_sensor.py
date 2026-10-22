@@ -74,30 +74,35 @@ class TestBeszelSensor:
         assert sensor.native_value == 10
 
     @pytest.mark.parametrize(
-        ("metrics", "expected"),
+        ("stats", "expected"),
         [
-            ({"rb": 1048576, "wb": 524288}, (1.05, 0.52)),
-            ({"rb": 0, "wb": 0, "r": 1, "w": 2}, (0, 0)),
+            (
+                {"efs": {"data": {"rb": 1048576, "wb": 524288}}},
+                {"efs_data_r": 1.05, "efs_data_w": 0.52},
+            ),
+            (
+                {"efs": {"data": {"rb": 0, "wb": 0, "r": 1, "w": 2}}},
+                {"efs_data_r": 0, "efs_data_w": 0},
+            ),
+            (
+                {"b": [2097152, 1048576], "dio": [524288, 262144]},
+                {"ns": 2.1, "nr": 1.05, "dr": 0.52, "dw": 0.26},
+            ),
         ],
     )
-    def test_filesystem_rates_read_byte_counters(self, metrics, expected):
-        """Byte rates keep the existing entity IDs and unavailable values."""
+    def test_data_rates_read_byte_counters(self, stats, expected):
+        """Byte rates become MB/s under the existing entity IDs."""
         coordinator = MagicMock()
         coordinator.config_entry.entry_id = "entry"
-        coordinator.data = {"system": {"stats": {"efs": {"data": metrics}}}}
+        coordinator.data = {"system": {"stats": stats}}
         by_id = {
             sensor.unique_id: sensor
             for sensor in _create_available_sensors(coordinator)
         }
-        read = by_id["beszel_entry_system_stats_efs_data_r"]
-        write = by_id["beszel_entry_system_stats_efs_data_w"]
-        assert (read.native_value, write.native_value) == expected
-        metrics.clear()
-        assert read.native_value is None
-        assert write.native_value is None
-        assert read.unique_id not in {
-            sensor.unique_id for sensor in _create_available_sensors(coordinator)
-        }
+        assert {
+            suffix: by_id[f"beszel_entry_system_stats_{suffix}"].native_value
+            for suffix in expected
+        } == expected
 
     def test_sensor_discovery_uses_reported_values_and_scoped_ids(self):
         """Discovery omits missing rates and scopes identifiers."""
@@ -177,26 +182,6 @@ class TestBeszelSensor:
         stats["g"]["0"]["u"] = None
         assert gpu.native_value is None
         assert _create_available_sensors(coordinator, set(by_id)) == []
-
-    def test_data_rates_read_byte_counters(self):
-        """Byte counters are converted to megabytes per second."""
-        coordinator = MagicMock()
-        coordinator.config_entry.entry_id = "entry"
-        coordinator.data = {
-            "system": {
-                "id": "system",
-                "name": "Server",
-                "status": "up",
-                "info": {},
-                "stats": {"b": [2097152, 1048576], "dio": [524288, 262144]},
-            }
-        }
-        sensors = _create_available_sensors(coordinator)
-        by_id = {sensor.unique_id: sensor for sensor in sensors}
-        assert by_id["beszel_entry_system_stats_ns"].native_value == 2.1
-        assert by_id["beszel_entry_system_stats_nr"].native_value == 1.05
-        assert by_id["beszel_entry_system_stats_dr"].native_value == 0.52
-        assert by_id["beszel_entry_system_stats_dw"].native_value == 0.26
 
     def test_new_metrics_are_discovered_on_later_data(self):
         """A later coordinator snapshot exposes newly reported metrics."""

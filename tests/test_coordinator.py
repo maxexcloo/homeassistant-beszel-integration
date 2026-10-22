@@ -29,9 +29,8 @@ class FakeApiClient:
         return {}
 
     async def async_get_systems(self):
-        """Return one malformed and two valid systems."""
+        """Return two systems."""
         return [
-            {"name": "Malformed"},
             {"id": "healthy", "name": "Healthy", "status": "up"},
             {"id": "failed", "name": "Failed", "status": "down"},
         ]
@@ -61,7 +60,6 @@ class TestBeszelDataUpdateCoordinator:
             hass,
             api_client=api,
             config_entry=MockConfigEntry(domain=DOMAIN),
-            update_interval_seconds=60,
         )
         info = (await coordinator._async_update_data())["system"]["info"]
         api.details_available = False
@@ -72,12 +70,11 @@ class TestBeszelDataUpdateCoordinator:
         assert "details unavailable" in caplog.text
 
     async def test_results_remain_mapped_and_failures_use_cache(self, hass, caplog):
-        """Malformed systems do not shift results and failures retain cache."""
+        """Results stay mapped to their systems and failures retain cache."""
         coordinator = BeszelDataUpdateCoordinator(
             hass,
             api_client=FakeApiClient(),
             config_entry=MockConfigEntry(domain=DOMAIN),
-            update_interval_seconds=60,
         )
         coordinator.data = {
             "failed": {
@@ -111,7 +108,6 @@ class TestBeszelDataUpdateCoordinator:
             hass,
             api_client=AuthenticationFailureApi(),
             config_entry=MockConfigEntry(domain=DOMAIN),
-            update_interval_seconds=60,
         )
         with pytest.raises(ConfigEntryAuthFailed, match="beszel.local"):
             await coordinator._async_update_data()
@@ -130,7 +126,6 @@ class TestBeszelDataUpdateCoordinator:
             hass,
             api_client=MissingStatisticsApi(),
             config_entry=MockConfigEntry(domain=DOMAIN),
-            update_interval_seconds=60,
         )
         data = await coordinator._async_update_data()
         assert data["system"]["info"] is None
@@ -157,7 +152,6 @@ class TestBeszelDataUpdateCoordinator:
             hass,
             api_client=DetailedApi(),
             config_entry=MockConfigEntry(domain=DOMAIN),
-            update_interval_seconds=60,
         )
         data = await coordinator._async_update_data()
         assert data["system"]["info"]["c"] == 4

@@ -3,7 +3,7 @@
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 
 from .api import BeszelApiClient
-from .const import DEFAULT_UPDATE_INTERVAL_SECONDS, PLATFORMS
+from .const import PLATFORMS
 from .coordinator import BeszelDataUpdateCoordinator
 from .entity import device_identifier
 
@@ -20,7 +20,6 @@ async def async_setup_entry(hass, entry):
         hass,
         api_client=api_client,
         config_entry=entry,
-        update_interval_seconds=DEFAULT_UPDATE_INTERVAL_SECONDS,
     )
 
     await coordinator.async_config_entry_first_refresh()

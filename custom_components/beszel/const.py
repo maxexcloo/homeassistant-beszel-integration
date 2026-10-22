@@ -2,7 +2,6 @@
 
 from homeassistant.const import Platform
 
-DEFAULT_UPDATE_INTERVAL_SECONDS = 60
 DOMAIN = "beszel"
 MANUFACTURER = "Beszel"
 PLATFORMS = [Platform.SENSOR]

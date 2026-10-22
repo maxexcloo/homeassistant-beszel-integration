@@ -42,7 +42,6 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(BeszelApiAuthError):
                 await client.async_authenticate()
 
-        self.assertFalse(client._is_authenticated)
         self.assertEqual(pocketbase.collection.call_count, 2)
 
     async def test_authentication_falls_back_to_users(self):
@@ -136,11 +135,10 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
         with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
             client = BeszelApiClient("beszel.local", "user", "password")
             client.async_authenticate = AsyncMock()
-            client._is_authenticated = True
             with self.assertRaises(BeszelApiAuthError):
                 await client.async_get_latest_system_stats("system")
 
-        self.assertFalse(client._is_authenticated)
+        pocketbase.auth_store.clear.assert_called_once_with()
 
     async def test_system_details_are_keyed_by_system(self):
         """System details are returned keyed by their system identifier."""
@@ -164,10 +162,14 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_statistics_requests_reuse_valid_authentication(self):
         """Request methods authenticate once and reuse a still-valid session."""
+        pocketbase = MagicMock()
+        pocketbase.auth_store.token = ""
         authentication = MagicMock()
+        authentication.auth_with_password.side_effect = lambda *_: setattr(
+            pocketbase.auth_store, "token", "token"
+        )
         statistics = MagicMock()
         statistics.get_list.return_value = SimpleNamespace(items=[])
-        pocketbase = MagicMock()
         pocketbase.collection.side_effect = {
             "_superusers": authentication,
             "system_stats": statistics,
