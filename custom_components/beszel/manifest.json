@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/maxexcloo/homeassistant-beszel-integration/issues",
   "loggers": ["pocketbase"],
   "requirements": ["pocketbase==0.17.3"],
-  "version": "0.2.3"
+  "version": "0.3.0"
 }
