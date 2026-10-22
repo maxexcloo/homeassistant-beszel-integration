@@ -11,8 +11,6 @@ Requires Home Assistant 2026.10.2 or newer and Beszel 0.18.0 or newer.
 ## Features
 
 - Battery level and charging state.
-- Cached hardware and operating system details survive temporary details API failures.
-- Cached system metrics survive temporary per-system API failures.
 - CPU model, topology, and utilisation.
 - Disk capacity, throughput, latency, and I/O utilisation.
 - Dynamic discovery when systems or metrics appear after setup.
@@ -57,26 +55,20 @@ and enter:
 - **Username**: The Hub username or email address.
 - **Password**: The Hub password.
 
-Home Assistant only creates a sensor when Beszel reports data for it. Existing
-temperature entities are migrated automatically and keep their entity IDs and
-customisations. New systems and metrics are picked up during later updates
-without reloading the integration. Missing measurements show as unavailable, not
-zero. If one system briefly fails while the Hub is still reachable, its cached
-metrics stay cached. Measurement sensors are available only while the system is
+Home Assistant only creates a sensor when Beszel reports data for it. New systems
+and metrics are picked up during later updates without reloading the integration.
+Missing measurements show as unavailable, not zero. If the Hub briefly fails to
+return a system's metrics or details, the cached values are kept. Measurement sensors are available only while the system is
 up and the latest one-minute statistics record is no more than five minutes old.
 Missing or invalid record timestamps make measurements unavailable; static
 information and the system status remain available.
 
-Capacity and throughput readings use decimal GB, MB and MB/s. Beszel's binary
-source quantities are converted to match those existing units. Entity and
-statistics IDs are unchanged; previously recorded values are not rewritten, so
-historical graphs retain the earlier unit error before this correction.
+Capacity and throughput readings use decimal GB, MB and MB/s; Beszel's binary
+quantities are converted.
 
 To add more disks, configure the Beszel agent using the
 [additional disks guide](https://beszel.dev/guide/additional-disks). Each reported
 filesystem gets its own capacity, throughput and I/O sensors.
-Filesystem throughput uses current byte-rate fields when available and supports
-older Hub measurements without changing existing entity IDs.
 
 Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication
