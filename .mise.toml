@@ -1,5 +1,4 @@
 # Development
-
 [tasks.fmt]
 depends = ["fmt:mise", "fmt:oxfmt", "fmt:python"]
 

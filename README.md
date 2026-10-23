@@ -58,10 +58,11 @@ and enter:
 Home Assistant only creates a sensor when Beszel reports data for it. New systems
 and metrics are picked up during later updates without reloading the integration.
 Missing measurements show as unavailable, not zero. If the Hub briefly fails to
-return a system's metrics or details, the cached values are kept. Measurement sensors are available only while the system is
-up and the latest one-minute statistics record is no more than five minutes old.
-Missing or invalid record timestamps make measurements unavailable; static
-information and the system status remain available.
+return a system's metrics or details, the cached values are kept. Measurement
+sensors are available only while the system is up and the latest one-minute
+statistics record is no more than five minutes old. Missing or invalid record
+timestamps make measurements unavailable; static information and the system
+status remain available.
 
 Capacity and throughput readings use decimal GB, MB and MB/s; Beszel's binary
 quantities are converted.
