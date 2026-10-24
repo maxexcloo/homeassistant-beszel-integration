@@ -1,5 +1,6 @@
 """Tests for the Beszel config flow."""
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -10,7 +11,7 @@ from pocketbase.utils import ClientResponseError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.api import BeszelApiAuthError
-from custom_components.beszel.const import DOMAIN
+from custom_components.beszel.const import CONF_UPDATE_INTERVAL, DOMAIN
 
 
 async def test_user_flow_normalises_host(hass):
@@ -213,3 +214,32 @@ async def test_reconfigure_rejects_another_configured_account(hass):
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "already_configured"}
     assert entry.unique_id == "http://old.local_user"
+
+
+async def test_options_flow_sets_update_interval(hass):
+    """The update interval option reloads the entry with the new polling rate."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: "http://beszel.local",
+            CONF_PASSWORD: "password",
+            CONF_USERNAME: "user",
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    with patch("custom_components.beszel.BeszelApiClient", autospec=True) as api_class:
+        api_class.return_value.async_get_systems = AsyncMock(return_value=[])
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.runtime_data.update_interval == timedelta(minutes=1)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_UPDATE_INTERVAL: 5}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options == {CONF_UPDATE_INTERVAL: 5}
+    assert entry.runtime_data.update_interval == timedelta(minutes=5)

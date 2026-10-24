@@ -3,12 +3,18 @@
 import logging
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow
+from homeassistant.config_entries import ConfigFlow, OptionsFlowWithReload
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 from pocketbase.utils import ClientResponseError
 
 from .api import BeszelApiAuthError, BeszelApiClient, normalise_host, unique_id
-from .const import DOMAIN
+from .const import CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,6 +23,22 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
+    }
+)
+
+OPTIONS_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): vol.All(
+            NumberSelector(
+                NumberSelectorConfig(
+                    max=60,
+                    min=1,
+                    mode=NumberSelectorMode.BOX,
+                    unit_of_measurement="min",
+                )
+            ),
+            vol.Coerce(int),
+        ),
     }
 )
 
@@ -44,6 +66,12 @@ class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Beszel."""
 
     VERSION = 3
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Return the options flow for an entry."""
+        return BeszelOptionsFlow()
 
     async def async_step_reauth(self, entry_data):
         """Start reauthentication for an existing entry."""
@@ -120,4 +148,20 @@ class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+        )
+
+
+class BeszelOptionsFlow(OptionsFlowWithReload):
+    """Handle Beszel options."""
+
+    async def async_step_init(self, user_input=None):
+        """Manage the update interval."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self.add_suggested_values_to_schema(
+                OPTIONS_SCHEMA, self.config_entry.options
+            ),
         )

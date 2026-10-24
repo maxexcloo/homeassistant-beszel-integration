@@ -11,6 +11,7 @@ Requires Home Assistant 2026.10.2 or newer and Beszel 0.18.0 or newer.
 ## Features
 
 - Battery level and charging state.
+- Configurable update interval.
 - CPU model, topology, and utilisation.
 - Disk capacity, throughput, latency, and I/O utilisation.
 - Dynamic discovery when systems or metrics appear after setup.
@@ -72,6 +73,10 @@ To add more disks, configure the Beszel agent using the
 filesystem gets its own capacity, throughput and I/O sensors. Read and write
 latency, busy time and weighted I/O sensors are disabled by default; enable them on
 the device page when you need them.
+
+Statistics are fetched every minute by default. To store fewer states in the
+recorder, open **Settings → Devices & Services → Beszel → Configure** and set a
+longer **Update Interval**, up to 60 minutes.
 
 Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication

@@ -44,6 +44,18 @@
       }
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "update_interval": "Update Interval"
+        },
+        "data_description": {
+          "update_interval": "How often to fetch statistics from the Beszel Hub. Longer intervals store fewer states in the recorder."
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "agent_version": {
