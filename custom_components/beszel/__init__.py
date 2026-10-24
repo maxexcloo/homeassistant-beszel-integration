@@ -5,7 +5,7 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from .api import BeszelApiClient
 from .const import PLATFORMS
 from .coordinator import BeszelDataUpdateCoordinator
-from .entity import device_identifier
+from .entity import device_identifier, network_probes_identifier
 
 
 async def async_setup_entry(hass, entry):
@@ -40,4 +40,6 @@ async def async_remove_config_entry_device(hass, entry, device_entry):
         device_identifier(entry.entry_id, system_id)
         for system_id in entry.runtime_data.data
     }
+    if any(system.get("network_probes") for system in entry.runtime_data.data.values()):
+        reported.add(network_probes_identifier(entry.entry_id))
     return reported.isdisjoint(device_entry.identifiers)

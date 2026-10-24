@@ -1,5 +1,7 @@
 """Tests for the Beszel data coordinator."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.util import dt as dt_util
@@ -24,6 +26,10 @@ class FakeApiClient:
             raise RuntimeError("stats unavailable")
         return {"stats": {"cpu": 12.5}, "created": dt_util.utcnow().isoformat()}
 
+    async def async_get_network_monitors(self):
+        """Return no probes by default."""
+        return []
+
     async def async_get_system_details(self):
         """Return no static system details by default."""
         return {}
@@ -38,6 +44,101 @@ class FakeApiClient:
 
 class TestBeszelDataUpdateCoordinator:
     """Exercise Beszel coordinator update behaviour."""
+
+    async def test_probe_failures_preserve_cache_and_do_not_block_system_stats(
+        self, hass, caplog
+    ):
+        """Each failed probe keeps its sample while healthy probes and hosts update."""
+        api = FakeApiClient()
+        api.async_get_network_monitors = AsyncMock(
+            return_value=[
+                {"id": "one", "system": "healthy", "enabled": True},
+                {"id": "two", "system": "healthy", "enabled": True},
+                {"id": "orphan", "system": "removed"},
+            ]
+        )
+        api.async_get_latest_network_monitor_stats = AsyncMock(
+            side_effect=[
+                RuntimeError("probe unavailable"),
+                {"created": 1234, "total_count": 2},
+            ]
+        )
+        coordinator = BeszelDataUpdateCoordinator(
+            hass, api_client=api, config_entry=MockConfigEntry(domain=DOMAIN)
+        )
+        sample = {"created": 1000, "total_count": 1}
+        coordinator.data = {
+            "healthy": {
+                "network_probes": {
+                    "one": {"stats": sample},
+                    "deleted": {"stats": sample},
+                }
+            }
+        }
+        data = await coordinator._async_update_data()
+        probes = data["healthy"]["network_probes"]
+        assert probes["one"]["stats"] == sample
+        assert probes["two"]["stats"]["created"] == 1234
+        assert set(probes) == {"one", "two"}
+        assert data["healthy"]["stats"] == {"cpu": 12.5}
+        assert api.async_get_latest_network_monitor_stats.await_count == 2
+        assert any(
+            "healthy" in message
+            and "http://beszel.local" in message
+            and "one" in message
+            for message in caplog.messages
+        )
+
+        coordinator.data = data
+        api.async_get_network_monitors.side_effect = RuntimeError(
+            "monitors unavailable"
+        )
+        assert (await coordinator._async_update_data())["healthy"][
+            "network_probes"
+        ] == probes
+        api.async_get_network_monitors.side_effect = None
+        api.async_get_network_monitors.return_value = []
+        assert (await coordinator._async_update_data())["healthy"][
+            "network_probes"
+        ] == {}
+
+    @pytest.mark.parametrize("endpoint", ["monitors", "stats"])
+    async def test_probe_authentication_failures_start_reauthentication(
+        self, hass, endpoint
+    ):
+        """Probe authentication failures must not be swallowed as partial outages."""
+        api = FakeApiClient()
+        api.async_get_network_monitors = AsyncMock(
+            return_value=[{"id": "probe", "system": "healthy"}]
+        )
+        api.async_get_latest_network_monitor_stats = AsyncMock()
+        method = (
+            api.async_get_network_monitors
+            if endpoint == "monitors"
+            else api.async_get_latest_network_monitor_stats
+        )
+        method.side_effect = BeszelApiAuthError("expired token")
+        coordinator = BeszelDataUpdateCoordinator(
+            hass, api_client=api, config_entry=MockConfigEntry(domain=DOMAIN)
+        )
+        with pytest.raises(ConfigEntryAuthFailed, match="beszel.local"):
+            await coordinator._async_update_data()
+
+    async def test_missing_probe_sample_does_not_reuse_old_measurement(self, hass):
+        """An empty successful query differs from a request failure."""
+        api = FakeApiClient()
+        api.async_get_network_monitors = AsyncMock(
+            return_value=[{"id": "probe", "system": "healthy"}]
+        )
+        api.async_get_latest_network_monitor_stats = AsyncMock(return_value=None)
+        coordinator = BeszelDataUpdateCoordinator(
+            hass, api_client=api, config_entry=MockConfigEntry(domain=DOMAIN)
+        )
+        coordinator.data = {
+            "healthy": {"network_probes": {"probe": {"stats": {"total_count": 5}}}}
+        }
+        data = await coordinator._async_update_data()
+        assert data["healthy"]["network_probes"]["probe"]["stats"] is None
 
     async def test_details_failure_retains_cached_info_with_fresh_statistics(
         self, hass, caplog

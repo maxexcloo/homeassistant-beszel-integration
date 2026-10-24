@@ -13,6 +13,77 @@ from custom_components.beszel.api import BeszelApiAuthError, BeszelApiClient
 class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
     """Exercise Beszel API authentication behaviour."""
 
+    async def test_network_monitors_and_native_stats_query(self):
+        """Discover all monitors and query the newest one-minute sample by ID."""
+        monitors = MagicMock()
+        monitors.get_full_list.return_value = [
+            SimpleNamespace(id="probe", system="one")
+        ]
+        sample = {"created": 1792717200000, "total_count": 2, "success_count": 1}
+        pocketbase = MagicMock()
+        pocketbase.send.return_value = {"items": [sample]}
+        pocketbase.collection.side_effect = {
+            "network_monitors": monitors,
+        }.__getitem__
+        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
+            client = BeszelApiClient("beszel.local", "user", "password")
+            client.async_authenticate = AsyncMock()
+            assert await client.async_get_network_monitors() == [
+                {"id": "probe", "system": "one"}
+            ]
+            assert (
+                await client.async_get_latest_network_monitor_stats("probe") == sample
+            )
+            pocketbase.send.assert_called_once_with(
+                "/api/collections/network_monitor_stats/records",
+                {
+                    "method": "GET",
+                    "params": {
+                        "page": 1,
+                        "perPage": 1,
+                        "filter": 'monitor="probe" && type="1m"',
+                        "sort": "-created",
+                    },
+                },
+            )
+            pocketbase.send.return_value = {"items": []}
+            assert await client.async_get_latest_network_monitor_stats("probe") is None
+
+    async def test_only_missing_monitor_collection_is_optional(self):
+        """Old Hubs remain supported; auth and temporary failures remain errors."""
+        for status in (404, 401, 403, 429, 500):
+            with self.subTest(status=status):
+                pocketbase = MagicMock()
+                pocketbase.collection.return_value.get_full_list.side_effect = (
+                    ClientResponseError(status=status)
+                )
+                with patch(
+                    "custom_components.beszel.api.PocketBase", return_value=pocketbase
+                ):
+                    client = BeszelApiClient("beszel.local", "user", "password")
+                    client.async_authenticate = AsyncMock()
+                    if status == 404:
+                        assert await client.async_get_network_monitors() == []
+                    else:
+                        error = (
+                            BeszelApiAuthError
+                            if status in (401, 403)
+                            else ClientResponseError
+                        )
+                        with self.assertRaises(error):
+                            await client.async_get_network_monitors()
+
+    async def test_probe_statistics_auth_failure_clears_session(self):
+        """Probe statistics authentication errors must trigger reauthentication."""
+        pocketbase = MagicMock()
+        pocketbase.send.side_effect = ClientResponseError(status=401)
+        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
+            client = BeszelApiClient("beszel.local", "user", "password")
+            client.async_authenticate = AsyncMock()
+            with self.assertRaises(BeszelApiAuthError):
+                await client.async_get_latest_network_monitor_stats("probe")
+        pocketbase.auth_store.clear.assert_called_once_with()
+
     async def test_authentication_connection_failures_are_not_invalid_credentials(self):
         """Connection failures and rate limits must remain retryable errors."""
         for status in (0, 408, 429, 500, 503):

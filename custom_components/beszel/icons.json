@@ -133,6 +133,18 @@
       "operating_system": {
         "default": "mdi:linux"
       },
+      "probe_max_response_time": {
+        "default": "mdi:timer-outline"
+      },
+      "probe_min_response_time": {
+        "default": "mdi:timer-outline"
+      },
+      "probe_packet_loss": {
+        "default": "mdi:network-off-outline"
+      },
+      "probe_response_time": {
+        "default": "mdi:timer-outline"
+      },
       "status": {
         "default": "mdi:server-network"
       },

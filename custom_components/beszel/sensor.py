@@ -79,6 +79,7 @@ from .entity import (
     os_icon,
     os_name,
 )
+from .network_probe import create_network_probe_sensors
 
 ValueFunction = Callable[[dict[str, Any]], Any]
 
@@ -696,6 +697,7 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
             sensor = BeszelTemperatureSensor(coordinator, system_id, temperature_name)
             entities.append(sensor)
 
+    entities.extend(create_network_probe_sensors(coordinator, known_unique_ids))
     return entities
 
 

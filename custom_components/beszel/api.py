@@ -140,3 +140,43 @@ class BeszelApiClient:
         except ClientResponseError as err:
             self._raise_if_unauthorised(err)
             raise
+
+    async def async_get_network_monitors(self):
+        """Fetch monitors, treating pre-0.20 Hubs as having no probes."""
+        await self.async_authenticate()
+        client = await self._async_client()
+        try:
+            records = await asyncio.to_thread(
+                client.collection("network_monitors").get_full_list,
+            )
+            return [vars(record) for record in records]
+        except ClientResponseError as err:
+            self._raise_if_unauthorised(err)
+            if err.status == 404:
+                return []
+            raise
+
+    async def async_get_latest_network_monitor_stats(self, monitor_id):
+        """Fetch the latest one-minute probe sample, including its timestamp."""
+        await self.async_authenticate()
+        client = await self._async_client()
+        try:
+            # Beszel uses Unix milliseconds here. PocketBase Record decoding
+            # assumes that `created` is a date string and cannot decode it.
+            result = await asyncio.to_thread(
+                client.send,
+                "/api/collections/network_monitor_stats/records",
+                {
+                    "method": "GET",
+                    "params": {
+                        "page": 1,
+                        "perPage": 1,
+                        "filter": f'monitor="{monitor_id}" && type="1m"',
+                        "sort": "-created",
+                    },
+                },
+            )
+            return result["items"][0] if result["items"] else None
+        except ClientResponseError as err:
+            self._raise_if_unauthorised(err)
+            raise

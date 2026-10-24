@@ -70,6 +70,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 return {}
 
             details = await self._fetch_system_details()
+            probes = await self._fetch_network_probes(systems)
             records = await asyncio.gather(
                 *(
                     self.api_client.async_get_latest_system_stats(system["id"])
@@ -102,6 +103,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                         system.get("info"), details.get(system_id, {})
                     ),
                     "name": name,
+                    "network_probes": probes.get(system_id, {}),
                     "stats": record.get("stats") if record else None,
                     "stats_created": record.get("created") if record else None,
                     "status": system.get("status", "unknown"),
@@ -117,6 +119,58 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(
                 f"Error communicating with Beszel Hub {self.api_client.host}: {err}"
             ) from err
+
+    async def _fetch_network_probes(self, systems):
+        """Fetch probes independently, preserving each failed sample's cache."""
+        cached = {
+            system["id"]: (self.data or {})
+            .get(system["id"], {})
+            .get("network_probes", {})
+            for system in systems
+        }
+        try:
+            monitors = await self.api_client.async_get_network_monitors()
+        except BeszelApiAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - probes are best-effort
+            _LOGGER.warning(
+                "Error fetching network monitors from Beszel Hub %s for systems %s: %s",
+                self.api_client.host,
+                ", ".join(
+                    f"{system.get('name', system['id'])} ({system['id']})"
+                    for system in systems
+                ),
+                err,
+            )
+            return cached
+
+        monitors = [monitor for monitor in monitors if monitor.get("system") in cached]
+        records = await asyncio.gather(
+            *(
+                self.api_client.async_get_latest_network_monitor_stats(monitor["id"])
+                for monitor in monitors
+            ),
+            return_exceptions=True,
+        )
+        probes = {system["id"]: {} for system in systems}
+        names = {system["id"]: system.get("name", system["id"]) for system in systems}
+        for monitor, record in zip(monitors, records, strict=True):
+            system_id = monitor["system"]
+            monitor_id = monitor["id"]
+            if isinstance(record, (asyncio.CancelledError, BeszelApiAuthError)):
+                raise record
+            if isinstance(record, Exception):
+                _LOGGER.warning(
+                    "Error fetching network probe %s from Beszel Hub %s for system %s (%s): %s",
+                    monitor_id,
+                    self.api_client.host,
+                    names[system_id],
+                    system_id,
+                    record,
+                )
+                record = cached[system_id].get(monitor_id, {}).get("stats")
+            probes[system_id][monitor_id] = {**monitor, "stats": record}
+        return probes
 
     async def _fetch_system_details(self):
         """Fetch static system details, reusing the last details on failure."""

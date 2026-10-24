@@ -19,6 +19,7 @@ Requires Home Assistant 2026.10.2 or newer and Beszel 0.18.0 or newer.
 - GPU memory, package power, power draw, and utilisation.
 - Memory, swap, network, operating system, status, and uptime sensors.
 - Multiple Beszel Hubs and systems without device or entity collisions.
+- Network probe response times and packet loss in a separate Network Probes device per Hub.
 - Per-filesystem and temperature sensors with distinct identifiers for each metric.
 - Reauthentication and reconfiguration through Home Assistant.
 - Removal of devices for systems the Hub no longer reports.
@@ -82,6 +83,25 @@ longer **Update Interval**, up to 60 minutes.
 Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication
 expires.
+
+### Network Probes
+
+With Beszel Hub and agents 0.20.0 or newer, configure
+[Network Monitors](https://beszel.dev/guide/network-monitors) in Beszel. When any
+system reports probe measurements, the integration automatically creates a
+separate **Network Probes** device in that Hub's integration entry. Older Hubs
+continue to work without probe sensors.
+
+Each monitor provides average, minimum and maximum response time in milliseconds
+and packet loss in percent from its latest one-minute statistics record. Sensor
+names include the probing system, target, protocol and TCP port where applicable.
+Monitors of the same target from different systems or Hubs remain distinct.
+
+Missing measurements and response times without successful probes remain unknown.
+Disabled probes and probes on offline or removed systems are unavailable. Cached
+samples survive temporary API failures, but become unavailable after five minutes
+or the configured probe interval plus two minutes, whichever is longer. New probes
+and measurements are discovered during later updates without reloading.
 
 ## Contributing
 

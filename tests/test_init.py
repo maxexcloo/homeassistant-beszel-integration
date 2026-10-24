@@ -31,6 +31,7 @@ async def test_integration_setup_update_and_unload(hass, freezer):
     with patch("custom_components.beszel.BeszelApiClient", autospec=True) as api_class:
         api = api_class.return_value
         api.host = "http://beszel.local"
+        api.async_get_network_monitors.return_value = []
         api.async_get_systems = AsyncMock(
             return_value=[
                 {
@@ -142,3 +143,92 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         await hass.async_block_till_done()
         assert not coordinator._listeners
         assert state("stats_cpu").state == "unavailable"
+
+
+async def test_probe_device_is_discovered_updated_and_removable(hass, freezer):
+    """Discover probes on later refreshes and maintain the shared device lifecycle."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Beszel",
+        data={
+            "host": "http://beszel.local",
+            "password": "password",
+            "username": "user",
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    entities = er.async_get(hass)
+    devices = dr.async_get(hass)
+    identifier = (DOMAIN, f"{entry.entry_id}_network_probes")
+    with patch("custom_components.beszel.BeszelApiClient", autospec=True) as api_class:
+        api = api_class.return_value
+        api.host = "http://beszel.local"
+        api.async_get_systems.return_value = [
+            {"id": system, "name": system, "status": "up"} for system in ("one", "two")
+        ]
+        api.async_get_system_details.return_value = {}
+        api.async_get_latest_system_stats.return_value = None
+        api.async_get_network_monitors.return_value = []
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        coordinator = entry.runtime_data
+        assert (
+            devices.async_get_device_by_identifier(identifier, entry.entry_id) is None
+        )
+
+        api.async_get_network_monitors.return_value = [
+            {
+                "id": system,
+                "system": system,
+                "target": "example.com",
+                "protocol": "icmp",
+                "enabled": True,
+                "interval": 30,
+            }
+            for system in ("one", "two")
+        ]
+        api.async_get_latest_network_monitor_stats.return_value = {
+            "created": int(dt_util.utcnow().timestamp() * 1000),
+            "total_count": 2,
+            "success_count": 1,
+            "res_sum": 12000,
+            "res_min": 12000,
+            "res_max": 12000,
+        }
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        device = devices.async_get_device_by_identifier(identifier, entry.entry_id)
+        assert device is not None
+        assert device.name == "Network Probes"
+        probes = [
+            entity
+            for entity in er.async_entries_for_config_entry(entities, entry.entry_id)
+            if entity.device_id == device.id
+        ]
+        assert len(probes) == 8
+        assert not await async_remove_config_entry_device(hass, entry, device)
+        entity_id = entities.async_get_entity_id(
+            "sensor", DOMAIN, f"beszel_{entry.entry_id}_one_probe_one_response_time"
+        )
+        assert hass.states.get(entity_id).state == "12.0"
+        assert "one example.com (ICMP)" in hass.states.get(entity_id).name
+        api.async_get_latest_network_monitor_stats.side_effect = RuntimeError(
+            "probe failed"
+        )
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert hass.states.get(entity_id).state == "12.0"
+        freezer.tick(301)
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert hass.states.get(entity_id).state == "unavailable"
+        assert len(er.async_entries_for_device(entities, device.id)) == 8
+
+        api.async_get_network_monitors.return_value = []
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert await async_remove_config_entry_device(hass, entry, device)
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert not coordinator._listeners

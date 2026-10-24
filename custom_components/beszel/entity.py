@@ -20,6 +20,11 @@ def entity_unique_id(entry_id, system_id, suffix):
     return f"{DOMAIN}_{entry_id}_{system_id}_{suffix}"
 
 
+def network_probes_identifier(entry_id):
+    """Return the identifier of the Hub's shared Network Probes device."""
+    return (DOMAIN, f"{entry_id}_network_probes")
+
+
 def os_name(value):
     """Return the operating-system name for a Beszel type code."""
     return OPERATING_SYSTEMS.get(value, (None, None))[0]
