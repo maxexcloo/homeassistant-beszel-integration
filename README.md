@@ -69,7 +69,9 @@ quantities are converted.
 
 To add more disks, configure the Beszel agent using the
 [additional disks guide](https://beszel.dev/guide/additional-disks). Each reported
-filesystem gets its own capacity, throughput and I/O sensors.
+filesystem gets its own capacity, throughput and I/O sensors. Read and write
+latency, busy time and weighted I/O sensors are disabled by default; enable them on
+the device page when you need them.
 
 Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication

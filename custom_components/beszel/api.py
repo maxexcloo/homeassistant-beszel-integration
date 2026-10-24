@@ -1,6 +1,7 @@
 """API for Beszel."""
 
 import asyncio
+from datetime import UTC, datetime
 
 from pocketbase import PocketBase
 from pocketbase.utils import ClientResponseError, validate_token
@@ -11,6 +12,16 @@ def normalise_host(host):
     if not host.startswith(("http://", "https://")):
         host = f"http://{host}"
     return host.rstrip("/")
+
+
+def _record_fields(record):
+    """Return a record's fields with its creation time as an aware UTC timestamp."""
+    fields = dict(vars(record))
+    created = fields.get("created")
+    # PocketBase parses record timestamps into naive UTC datetimes.
+    if isinstance(created, datetime):
+        fields["created"] = created.replace(tzinfo=UTC).isoformat()
+    return fields
 
 
 def unique_id(host, username):
@@ -28,7 +39,7 @@ class BeszelApiClient:
     def __init__(self, host, username, password):
         """Initialise the API client."""
         host = normalise_host(host)
-        self._client = PocketBase(host)
+        self._client = None
         self._host = host
         self._password = password
         self._username = username
@@ -38,9 +49,17 @@ class BeszelApiClient:
         """Return the normalised Beszel Hub URL."""
         return self._host
 
+    async def _async_client(self):
+        """Return the PocketBase client, creating it outside the event loop."""
+        # Creating the client loads the CA bundle, which blocks.
+        if self._client is None:
+            self._client = await asyncio.to_thread(PocketBase, self._host)
+        return self._client
+
     async def async_authenticate(self):
         """Authenticate with the Beszel Hub."""
-        token = self._client.auth_store.token
+        client = await self._async_client()
+        token = client.auth_store.token
         if token and validate_token(token):
             return
 
@@ -48,7 +67,7 @@ class BeszelApiClient:
         for collection in ("_superusers", "users"):
             try:
                 await asyncio.to_thread(
-                    self._client.collection(collection).auth_with_password,
+                    client.collection(collection).auth_with_password,
                     self._username,
                     self._password,
                 )
@@ -71,9 +90,10 @@ class BeszelApiClient:
     async def async_get_latest_system_stats(self, system_id):
         """Fetch the latest statistics record, including its source timestamp."""
         await self.async_authenticate()
+        client = await self._async_client()
         try:
             result = await asyncio.to_thread(
-                self._client.collection("system_stats").get_list,
+                client.collection("system_stats").get_list,
                 1,
                 1,
                 query_params={
@@ -82,7 +102,7 @@ class BeszelApiClient:
                 },
             )
             if result.items:
-                return vars(result.items[0])
+                return _record_fields(result.items[0])
             return None
         except ClientResponseError as err:
             self._raise_if_unauthorised(err)
@@ -91,9 +111,10 @@ class BeszelApiClient:
     async def async_get_system_details(self):
         """Fetch static system details keyed by system ID."""
         await self.async_authenticate()
+        client = await self._async_client()
         try:
             records = await asyncio.to_thread(
-                self._client.collection("system_details").get_full_list,
+                client.collection("system_details").get_full_list,
             )
         except ClientResponseError as err:
             self._raise_if_unauthorised(err)
@@ -109,9 +130,10 @@ class BeszelApiClient:
     async def async_get_systems(self):
         """Fetch all systems from the Beszel Hub."""
         await self.async_authenticate()
+        client = await self._async_client()
         try:
             records = await asyncio.to_thread(
-                self._client.collection("systems").get_full_list,
+                client.collection("systems").get_full_list,
                 query_params={"sort": "-status,name"},
             )
             return [vars(record) for record in records]

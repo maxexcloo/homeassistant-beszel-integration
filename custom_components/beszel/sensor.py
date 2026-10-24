@@ -297,6 +297,7 @@ STATS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="disk_read_await_ms",
         translation_key="disk_read_await",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -313,6 +314,7 @@ STATS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="disk_read_time_percent",
         translation_key="disk_read_time",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 0)),
@@ -340,6 +342,7 @@ STATS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="disk_weighted_io_percent",
         translation_key="disk_weighted_io",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 5)),
@@ -347,6 +350,7 @@ STATS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="disk_write_await_ms",
         translation_key="disk_write_await",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -363,6 +367,7 @@ STATS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="disk_write_time_percent",
         translation_key="disk_write_time",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 1)),
@@ -464,6 +469,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="read_await_ms",
         translation_key="filesystem_read_await",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -480,6 +486,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="read_time_percent",
         translation_key="filesystem_read_time",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 0)),
@@ -510,6 +517,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="weighted_io_percent",
         translation_key="filesystem_weighted_io",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 5)),
@@ -517,6 +525,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="write_await_ms",
         translation_key="filesystem_write_await",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -533,6 +542,7 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
     BeszelSensorDescription(
         key="write_time_percent",
         translation_key="filesystem_write_time",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _rounded(_array_item(data, ATTR_FS_DISK_IO_STATS, 1)),

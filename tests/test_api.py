@@ -1,6 +1,7 @@
 """Tests for the Beszel API client."""
 
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -99,9 +100,10 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_latest_statistics_query_one_minute_records(self):
         """Longer averaged records must not replace the latest live sample."""
         collection = MagicMock()
+        # PocketBase returns record timestamps as naive UTC datetimes.
         collection.get_list.return_value = SimpleNamespace(
             items=[
-                SimpleNamespace(stats={"cpu": 12.5}, created="2026-10-22 01:00:00.000Z")
+                SimpleNamespace(stats={"cpu": 12.5}, created=datetime(2026, 10, 22, 1))
             ]
         )
         pocketbase = MagicMock()
@@ -113,7 +115,7 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             result = await client.async_get_latest_system_stats("system")
 
         self.assertEqual(
-            result, {"stats": {"cpu": 12.5}, "created": "2026-10-22 01:00:00.000Z"}
+            result, {"stats": {"cpu": 12.5}, "created": "2026-10-22T01:00:00+00:00"}
         )
         pocketbase.collection.assert_called_once_with("system_stats")
         collection.get_list.assert_called_once_with(
