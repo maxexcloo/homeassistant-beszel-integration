@@ -312,7 +312,16 @@ def test_temperature_names_follow_the_cpu_thermal_rule():
     coordinator = MagicMock()
     coordinator.config_entry.entry_id = "entry"
     coordinator.data = {
-        "system": {"stats": {"t": {"cpu_thermal": 40, "nvme_composite": 30}}}
+        "system": {
+            "stats": {
+                "t": {
+                    "amd gpu (15e7)": 50,
+                    "amdgpu_edge": 45,
+                    "cpu_thermal": 40,
+                    "nvme_composite": 30,
+                }
+            }
+        }
     }
     by_key = {
         sensor.unique_id.rsplit("_temperature_", 1)[1]: sensor
@@ -321,6 +330,12 @@ def test_temperature_names_follow_the_cpu_thermal_rule():
     }
     assert by_key["cpu_thermal"].translation_key == "cpu_temperature"
     assert by_key["nvme_composite"].translation_key == "temperature"
-    assert by_key["nvme_composite"].translation_placeholders == {
-        "temperature": "NVMe Composite"
+    assert {
+        key: sensor.translation_placeholders["temperature"]
+        for key, sensor in by_key.items()
+        if key != "cpu_thermal"
+    } == {
+        "amd gpu (15e7)": "AMD GPU (15e7)",
+        "amdgpu_edge": "AMDGPU Edge",
+        "nvme_composite": "NVMe Composite",
     }

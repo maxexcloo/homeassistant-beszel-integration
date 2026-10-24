@@ -10,6 +10,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel import async_remove_config_entry_device
 from custom_components.beszel.const import DOMAIN
+from custom_components.beszel.diagnostics import async_get_config_entry_diagnostics
 
 
 async def test_integration_setup_update_and_unload(hass, freezer):
@@ -80,6 +81,18 @@ async def test_integration_setup_update_and_unload(hass, freezer):
             EntityCategory.DIAGNOSTIC
         )
         assert "state_class" not in state("info_u").attributes
+        assert "state_class" not in state("stats_efs_data_d").attributes
+        assert registry.async_get(
+            state("stats_efs_data_d").entity_id
+        ).entity_category == (EntityCategory.DIAGNOSTIC)
+
+        diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+        assert diagnostics["config_entry"]["data"] == {
+            "host": "http://beszel.local",
+            "password": "**REDACTED**",
+            "username": "**REDACTED**",
+        }
+        assert diagnostics["systems"]["system"]["stats"]["cpu"] == 12.5
 
         api.async_get_systems.return_value[0]["info"] = {}
         api.async_get_system_details.return_value = {}

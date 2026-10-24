@@ -13,6 +13,7 @@ Requires Home Assistant 2026.10.2 or newer and Beszel 0.18.0 or newer.
 - Battery level and charging state.
 - Configurable update interval.
 - CPU model, topology, and utilisation.
+- Diagnostics download with credentials redacted.
 - Disk capacity, throughput, latency, and I/O utilisation.
 - Dynamic discovery when systems or metrics appear after setup.
 - GPU memory, package power, power draw, and utilisation.

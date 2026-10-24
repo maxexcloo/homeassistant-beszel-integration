@@ -184,6 +184,29 @@ def _uptime_value(data):
     return int(seconds) if seconds.is_integer() else seconds
 
 
+# Words in Beszel temperature keys that have established capitalisation.
+_TEMPERATURE_WORDS = {
+    "amd": "AMD",
+    "amdgpu": "AMDGPU",
+    "cpu": "CPU",
+    "gpu": "GPU",
+    "jc42": "JC42",
+    "lm63": "LM63",
+    "mac": "MAC",
+    "nvme": "NVMe",
+    "phy": "PHY",
+    "spd5118": "SPD5118",
+}
+
+
+def _temperature_name(key):
+    """Return a readable name for a Beszel temperature key."""
+    return " ".join(
+        _TEMPERATURE_WORDS.get(word.lower(), word[:1].upper() + word[1:])
+        for word in key.replace("_", " ").split()
+    )
+
+
 def _temperature_value(system_data, key):
     """Return a Beszel temperature in degrees Celsius."""
     temperatures = mapping(mapping(system_data.get("stats")).get(ATTR_TEMPERATURES))
@@ -323,8 +346,8 @@ STATS_SENSOR_DESCRIPTIONS = (
         key=ATTR_DISK_TOTAL_GB,
         translation_key="disk_total",
         device_class=SensorDeviceClass.DATA_SIZE,
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
-        state_class=SensorStateClass.MEASUREMENT,
     ),
     BeszelSensorDescription(
         key=ATTR_DISK_PERCENT,
@@ -383,8 +406,8 @@ STATS_SENSOR_DESCRIPTIONS = (
         key=ATTR_MEM_TOTAL_GB,
         translation_key="memory_total",
         device_class=SensorDeviceClass.DATA_SIZE,
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
-        state_class=SensorStateClass.MEASUREMENT,
     ),
     BeszelSensorDescription(
         key=ATTR_MEM_PERCENT,
@@ -437,8 +460,8 @@ STATS_SENSOR_DESCRIPTIONS = (
         key=ATTR_SWAP_TOTAL_GB,
         translation_key="swap_total",
         device_class=SensorDeviceClass.DATA_SIZE,
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
-        state_class=SensorStateClass.MEASUREMENT,
     ),
     BeszelSensorDescription(
         key=ATTR_SWAP_PERCENT,
@@ -495,8 +518,8 @@ EXTRA_FS_SENSOR_DESCRIPTIONS = (
         key=ATTR_FS_DISK_TOTAL_GB,
         translation_key="filesystem_total",
         device_class=SensorDeviceClass.DATA_SIZE,
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
-        state_class=SensorStateClass.MEASUREMENT,
     ),
     BeszelSensorDescription(
         key=ATTR_FS_DISK_PERCENT,
@@ -554,8 +577,8 @@ GPU_SENSOR_DESCRIPTIONS = (
         key=ATTR_GPU_MEM_TOTAL_MB,
         translation_key="gpu_memory_total",
         device_class=SensorDeviceClass.DATA_SIZE,
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=UnitOfInformation.MEGABYTES,
-        state_class=SensorStateClass.MEASUREMENT,
     ),
     BeszelSensorDescription(
         key=ATTR_GPU_MEM_USED_MB,
@@ -823,9 +846,8 @@ class BeszelTemperatureSensor(BeszelCoordinatorSensor):
             coordinator, system_id, temperature_key
         )
         if not is_cpu_temperature:
-            processed_name = temperature_key.replace("_", " ").title()
             self._attr_translation_placeholders = {
-                "temperature": processed_name.replace("Nvme", "NVMe")
+                "temperature": _temperature_name(temperature_key)
             }
 
     @property
