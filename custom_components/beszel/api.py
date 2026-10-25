@@ -2,8 +2,10 @@
 
 import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from pocketbase import PocketBase
+from pocketbase.services.record_service import RecordService
 from pocketbase.utils import ClientResponseError, validate_token
 
 
@@ -31,6 +33,14 @@ def unique_id(host, username):
 
 class BeszelApiAuthError(Exception):
     """Custom exception for authentication errors."""
+
+
+class _NetworkMonitorStatsService(RecordService):
+    """Keep probe timestamps in Unix milliseconds when decoding records."""
+
+    def decode(self, data):
+        """Avoid PocketBase's date-string decoder for numeric `created` fields."""
+        return SimpleNamespace(**data)
 
 
 class BeszelApiClient:
@@ -161,22 +171,18 @@ class BeszelApiClient:
         await self.async_authenticate()
         client = await self._async_client()
         try:
-            # Beszel uses Unix milliseconds here. PocketBase Record decoding
-            # assumes that `created` is a date string and cannot decode it.
             result = await asyncio.to_thread(
-                client.send,
-                "/api/collections/network_monitor_stats/records",
-                {
-                    "method": "GET",
-                    "params": {
-                        "page": 1,
-                        "perPage": 1,
-                        "filter": f'monitor="{monitor_id}" && type="1m"',
-                        "sort": "-created",
-                    },
+                _NetworkMonitorStatsService(client, "network_monitor_stats").get_list,
+                1,
+                1,
+                query_params={
+                    "filter": f'monitor="{monitor_id}" && type="1m"',
+                    "sort": "-created",
                 },
             )
-            return result["items"][0] if result["items"] else None
+            if result.items:
+                return _record_fields(result.items[0])
+            return None
         except ClientResponseError as err:
             self._raise_if_unauthorised(err)
             raise

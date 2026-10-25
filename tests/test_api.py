@@ -13,15 +13,21 @@ from custom_components.beszel.api import BeszelApiAuthError, BeszelApiClient
 class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
     """Exercise Beszel API authentication behaviour."""
 
-    async def test_network_monitors_and_native_stats_query(self):
-        """Discover all monitors and query the newest one-minute sample by ID."""
+    async def test_network_monitors_and_latest_stats_query(self):
+        """Query the newest probe record without losing its numeric timestamp."""
         monitors = MagicMock()
         monitors.get_full_list.return_value = [
             SimpleNamespace(id="probe", system="one")
         ]
         sample = {"created": 1792717200000, "total_count": 2, "success_count": 1}
         pocketbase = MagicMock()
-        pocketbase.send.return_value = {"items": [sample]}
+        pocketbase.send.return_value = {
+            "page": 1,
+            "perPage": 1,
+            "totalItems": 1,
+            "totalPages": 1,
+            "items": [sample],
+        }
         pocketbase.collection.side_effect = {
             "network_monitors": monitors,
         }.__getitem__
@@ -46,7 +52,13 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
                     },
                 },
             )
-            pocketbase.send.return_value = {"items": []}
+            pocketbase.send.return_value = {
+                "page": 1,
+                "perPage": 1,
+                "totalItems": 0,
+                "totalPages": 0,
+                "items": [],
+            }
             assert await client.async_get_latest_network_monitor_stats("probe") is None
 
     async def test_only_missing_monitor_collection_is_optional(self):
