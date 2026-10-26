@@ -56,6 +56,11 @@
       }
     }
   },
+  "device": {
+    "network_probes": {
+      "name": "Network Probes"
+    }
+  },
   "entity": {
     "sensor": {
       "agent_version": {
@@ -197,6 +202,18 @@
       },
       "operating_system": {
         "name": "Operating System"
+      },
+      "probe_max_response_time": {
+        "name": "{probe} Maximum Response Time"
+      },
+      "probe_min_response_time": {
+        "name": "{probe} Minimum Response Time"
+      },
+      "probe_packet_loss": {
+        "name": "{probe} Packet Loss"
+      },
+      "probe_response_time": {
+        "name": "{probe} Response Time"
       },
       "status": {
         "name": "Status",

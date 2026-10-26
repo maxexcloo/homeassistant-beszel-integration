@@ -72,6 +72,7 @@ from .const import (
 )
 from .entity import (
     BeszelEntity,
+    as_number,
     device_details,
     device_identifier,
     entity_unique_id,
@@ -79,6 +80,7 @@ from .entity import (
     os_icon,
     os_name,
 )
+from .network_probe import create_network_probe_sensors
 
 ValueFunction = Callable[[dict[str, Any]], Any]
 
@@ -99,17 +101,9 @@ _UNIT_SCALES = {
 }
 
 
-def _number(value):
-    """Return a float, or None for a missing or malformed Beszel value."""
-    try:
-        return float(value)
-    except TypeError, ValueError:
-        return None
-
-
 def _rounded(value, precision=2):
     """Return a rounded number, or None for a missing or malformed value."""
-    number = _number(value)
+    number = as_number(value)
     return None if number is None else round(number, precision)
 
 
@@ -123,7 +117,7 @@ def _array_item(data, key, index):
 
 def _megabytes_per_second(value):
     """Return MB/s from a Beszel byte rate."""
-    number = _number(value)
+    number = as_number(value)
     return None if number is None else round(number / 1_000_000, 2)
 
 
@@ -139,7 +133,7 @@ def _has_battery(data):
 
 def _battery_percent(data):
     """Return the Beszel battery percentage."""
-    value = _number(_array_item(data, ATTR_BATTERY, 0))
+    value = as_number(_array_item(data, ATTR_BATTERY, 0))
     return round(value) if value is not None and _has_battery(data) else None
 
 
@@ -153,7 +147,7 @@ def _battery_state(data):
         4: "discharging",
         5: "idle",
     }
-    value = _number(_array_item(data, ATTR_BATTERY, 1))
+    value = as_number(_array_item(data, ATTR_BATTERY, 1))
     if value is None or not _has_battery(data):
         return None
     return states.get(round(value), "unknown")
@@ -161,8 +155,8 @@ def _battery_state(data):
 
 def _used_percent(data, total_key, used_key):
     """Return a percentage only when both source values are reported."""
-    total = _number(data.get(total_key))
-    used = _number(data.get(used_key))
+    total = as_number(data.get(total_key))
+    used = as_number(data.get(used_key))
     if total is None or used is None:
         return None
     return round(used / total * 100, 2) if total else 0
@@ -172,13 +166,13 @@ def _normalise_value(value, native_unit):
     """Normalise values whose Home Assistant representation is constrained."""
     if native_unit not in _UNIT_SCALES:
         return value
-    number = _number(value)
+    number = as_number(value)
     return None if number is None else round(number * _UNIT_SCALES[native_unit], 2)
 
 
 def _uptime_value(data):
     """Return a valid duration from a Beszel uptime value."""
-    seconds = _number(data.get(ATTR_UPTIME))
+    seconds = as_number(data.get(ATTR_UPTIME))
     if seconds is None or seconds < 0:
         return None
     return int(seconds) if seconds.is_integer() else seconds
@@ -696,6 +690,7 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
             sensor = BeszelTemperatureSensor(coordinator, system_id, temperature_name)
             entities.append(sensor)
 
+    entities.extend(create_network_probe_sensors(coordinator, known_unique_ids))
     return entities
 
 

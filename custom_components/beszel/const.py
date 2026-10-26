@@ -67,3 +67,11 @@ ATTR_GPU_NAME = "n"
 ATTR_GPU_POWER_PACKAGE_W = "pp"
 ATTR_GPU_POWER_W = "p"
 ATTR_GPU_USAGE_PERCENT = "u"
+
+# Beszel RawMonitorStatsRecord fields
+ATTR_PROBE_CREATED = "created"
+ATTR_PROBE_RES_MAX = "res_max"
+ATTR_PROBE_RES_MIN = "res_min"
+ATTR_PROBE_RES_SUM = "res_sum"
+ATTR_PROBE_SUCCESS_COUNT = "success_count"
+ATTR_PROBE_TOTAL_COUNT = "total_count"

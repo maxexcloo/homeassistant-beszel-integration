@@ -2,8 +2,10 @@
 
 import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from pocketbase import PocketBase
+from pocketbase.services.record_service import RecordService
 from pocketbase.utils import ClientResponseError, validate_token
 
 
@@ -31,6 +33,14 @@ def unique_id(host, username):
 
 class BeszelApiAuthError(Exception):
     """Custom exception for authentication errors."""
+
+
+class _NetworkMonitorStatsService(RecordService):
+    """Keep probe timestamps in Unix milliseconds when decoding records."""
+
+    def decode(self, data):
+        """Avoid PocketBase's date-string decoder for numeric `created` fields."""
+        return SimpleNamespace(**data)
 
 
 class BeszelApiClient:
@@ -140,3 +150,40 @@ class BeszelApiClient:
         except ClientResponseError as err:
             self._raise_if_unauthorised(err)
             raise
+
+    async def async_get_network_monitors(self):
+        """Fetch monitors, treating pre-0.20 Hubs as having no probes."""
+        await self.async_authenticate()
+        client = await self._async_client()
+        try:
+            records = await asyncio.to_thread(
+                client.collection("network_monitors").get_full_list,
+            )
+            return [vars(record) for record in records]
+        except ClientResponseError as err:
+            self._raise_if_unauthorised(err)
+            if err.status == 404:
+                return []
+            raise
+
+    async def async_get_latest_network_monitor_stats(self, since):
+        """Fetch each monitor's latest one-minute sample created since a Unix ms time."""
+        await self.async_authenticate()
+        client = await self._async_client()
+        try:
+            records = await asyncio.to_thread(
+                _NetworkMonitorStatsService(
+                    client, "network_monitor_stats"
+                ).get_full_list,
+                query_params={
+                    "filter": f'type="1m" && created>={int(since)}',
+                    "sort": "-created",
+                },
+            )
+        except ClientResponseError as err:
+            self._raise_if_unauthorised(err)
+            raise
+        latest = {}
+        for record in records:
+            latest.setdefault(record.monitor, vars(record))
+        return latest

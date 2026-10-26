@@ -5,6 +5,14 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import ATTR_AGENT_VERSION, ATTR_OS, DOMAIN, MANUFACTURER, OPERATING_SYSTEMS
 
 
+def as_number(value):
+    """Return a float, or None for a missing or malformed Beszel value."""
+    try:
+        return float(value)
+    except TypeError, ValueError:
+        return None
+
+
 def mapping(value):
     """Return a mapping or an empty mapping for unavailable data."""
     return value if isinstance(value, dict) else {}
@@ -18,6 +26,11 @@ def device_identifier(entry_id, system_id):
 def entity_unique_id(entry_id, system_id, suffix):
     """Return the unique ID for an entity of a Beszel system."""
     return f"{DOMAIN}_{entry_id}_{system_id}_{suffix}"
+
+
+def network_probes_identifier(entry_id):
+    """Return the identifier of the Hub's shared Network Probes device."""
+    return (DOMAIN, f"{entry_id}_network_probes")
 
 
 def os_name(value):
