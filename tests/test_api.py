@@ -19,14 +19,16 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
         monitors.get_full_list.return_value = [
             SimpleNamespace(id="probe", system="one")
         ]
-        sample = {"created": 1792717200000, "total_count": 2, "success_count": 1}
+        newest = {"created": 1792717260000, "monitor": "probe", "total_count": 2}
+        older = {"created": 1792717200000, "monitor": "probe", "total_count": 1}
+        other = {"created": 1792717200000, "monitor": "other", "total_count": 3}
         pocketbase = MagicMock()
         pocketbase.send.return_value = {
             "page": 1,
-            "perPage": 1,
-            "totalItems": 1,
+            "perPage": 500,
+            "totalItems": 3,
             "totalPages": 1,
-            "items": [sample],
+            "items": [newest, older, other],
         }
         pocketbase.collection.side_effect = {
             "network_monitors": monitors,
@@ -37,29 +39,13 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             assert await client.async_get_network_monitors() == [
                 {"id": "probe", "system": "one"}
             ]
-            assert (
-                await client.async_get_latest_network_monitor_stats("probe") == sample
-            )
-            pocketbase.send.assert_called_once_with(
-                "/api/collections/network_monitor_stats/records",
-                {
-                    "method": "GET",
-                    "params": {
-                        "page": 1,
-                        "perPage": 1,
-                        "filter": 'monitor="probe" && type="1m"',
-                        "sort": "-created",
-                    },
-                },
-            )
-            pocketbase.send.return_value = {
-                "page": 1,
-                "perPage": 1,
-                "totalItems": 0,
-                "totalPages": 0,
-                "items": [],
-            }
-            assert await client.async_get_latest_network_monitor_stats("probe") is None
+            assert await client.async_get_latest_network_monitor_stats(
+                1792717140000.5
+            ) == {"other": other, "probe": newest}
+            path, options = pocketbase.send.call_args.args
+            assert path == "/api/collections/network_monitor_stats/records"
+            assert options["params"]["filter"] == 'type="1m" && created>=1792717140000'
+            assert options["params"]["sort"] == "-created"
 
     async def test_only_missing_monitor_collection_is_optional(self):
         """Old Hubs remain supported; auth and temporary failures remain errors."""
@@ -93,7 +79,7 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             client = BeszelApiClient("beszel.local", "user", "password")
             client.async_authenticate = AsyncMock()
             with self.assertRaises(BeszelApiAuthError):
-                await client.async_get_latest_network_monitor_stats("probe")
+                await client.async_get_latest_network_monitor_stats(0)
         pocketbase.auth_store.clear.assert_called_once_with()
 
     async def test_authentication_connection_failures_are_not_invalid_credentials(self):

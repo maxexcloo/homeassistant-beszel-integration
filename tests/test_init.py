@@ -188,13 +188,17 @@ async def test_probe_device_is_discovered_updated_and_removable(hass, freezer):
             }
             for system in ("one", "two")
         ]
-        api.async_get_latest_network_monitor_stats.return_value = {
+        sample = {
             "created": int(dt_util.utcnow().timestamp() * 1000),
             "total_count": 2,
             "success_count": 1,
             "res_sum": 12000,
             "res_min": 12000,
             "res_max": 12000,
+        }
+        api.async_get_latest_network_monitor_stats.return_value = {
+            "one": sample,
+            "two": sample,
         }
         await coordinator.async_refresh()
         await hass.async_block_till_done()

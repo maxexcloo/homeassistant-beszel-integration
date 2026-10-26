@@ -56,6 +56,11 @@
       }
     }
   },
+  "device": {
+    "network_probes": {
+      "name": "Network Probes"
+    }
+  },
   "entity": {
     "sensor": {
       "agent_version": {

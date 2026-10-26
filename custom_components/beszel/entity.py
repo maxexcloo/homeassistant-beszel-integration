@@ -5,6 +5,14 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import ATTR_AGENT_VERSION, ATTR_OS, DOMAIN, MANUFACTURER, OPERATING_SYSTEMS
 
 
+def as_number(value):
+    """Return a float, or None for a missing or malformed Beszel value."""
+    try:
+        return float(value)
+    except TypeError, ValueError:
+        return None
+
+
 def mapping(value):
     """Return a mapping or an empty mapping for unavailable data."""
     return value if isinstance(value, dict) else {}

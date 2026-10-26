@@ -166,23 +166,24 @@ class BeszelApiClient:
                 return []
             raise
 
-    async def async_get_latest_network_monitor_stats(self, monitor_id):
-        """Fetch the latest one-minute probe sample, including its timestamp."""
+    async def async_get_latest_network_monitor_stats(self, since):
+        """Fetch each monitor's latest one-minute sample created since a Unix ms time."""
         await self.async_authenticate()
         client = await self._async_client()
         try:
-            result = await asyncio.to_thread(
-                _NetworkMonitorStatsService(client, "network_monitor_stats").get_list,
-                1,
-                1,
+            records = await asyncio.to_thread(
+                _NetworkMonitorStatsService(
+                    client, "network_monitor_stats"
+                ).get_full_list,
                 query_params={
-                    "filter": f'monitor="{monitor_id}" && type="1m"',
+                    "filter": f'type="1m" && created>={int(since)}',
                     "sort": "-created",
                 },
             )
-            if result.items:
-                return _record_fields(result.items[0])
-            return None
         except ClientResponseError as err:
             self._raise_if_unauthorised(err)
             raise
+        latest = {}
+        for record in records:
+            latest.setdefault(record.monitor, vars(record))
+        return latest

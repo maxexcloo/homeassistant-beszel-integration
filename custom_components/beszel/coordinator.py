@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import BeszelApiAuthError
 from .const import (
@@ -17,6 +18,7 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
 )
+from .network_probe import probe_max_age
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,6 +130,9 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             .get("network_probes", {})
             for system in systems
         }
+        system_names = ", ".join(
+            f"{system.get('name', system['id'])} ({system['id']})" for system in systems
+        )
         try:
             monitors = await self.api_client.async_get_network_monitors()
         except BeszelApiAuthError:
@@ -136,40 +141,43 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(
                 "Error fetching network monitors from Beszel Hub %s for systems %s: %s",
                 self.api_client.host,
-                ", ".join(
-                    f"{system.get('name', system['id'])} ({system['id']})"
-                    for system in systems
-                ),
+                system_names,
                 err,
             )
             return cached
 
         monitors = [monitor for monitor in monitors if monitor.get("system") in cached]
-        records = await asyncio.gather(
-            *(
-                self.api_client.async_get_latest_network_monitor_stats(monitor["id"])
-                for monitor in monitors
-            ),
-            return_exceptions=True,
-        )
         probes = {system["id"]: {} for system in systems}
-        names = {system["id"]: system.get("name", system["id"]) for system in systems}
-        for monitor, record in zip(monitors, records, strict=True):
-            system_id = monitor["system"]
-            monitor_id = monitor["id"]
-            if isinstance(record, (asyncio.CancelledError, BeszelApiAuthError)):
-                raise record
-            if isinstance(record, Exception):
-                _LOGGER.warning(
-                    "Error fetching network probe %s from Beszel Hub %s for system %s (%s): %s",
-                    monitor_id,
-                    self.api_client.host,
-                    names[system_id],
-                    system_id,
-                    record,
-                )
-                record = cached[system_id].get(monitor_id, {}).get("stats")
-            probes[system_id][monitor_id] = {**monitor, "stats": record}
+        if not monitors:
+            return probes
+        # Older samples would be unavailable, so fetch only those still fresh enough.
+        max_age = max(probe_max_age(monitor.get("interval")) for monitor in monitors)
+        since = (dt_util.utcnow().timestamp() - max_age) * 1000
+        try:
+            records = await self.api_client.async_get_latest_network_monitor_stats(
+                since
+            )
+        except BeszelApiAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - probes are best-effort
+            _LOGGER.warning(
+                "Error fetching network probe statistics from Beszel Hub %s "
+                "for systems %s: %s",
+                self.api_client.host,
+                system_names,
+                err,
+            )
+            records = {
+                monitor["id"]: cached[monitor["system"]]
+                .get(monitor["id"], {})
+                .get("stats")
+                for monitor in monitors
+            }
+        for monitor in monitors:
+            probes[monitor["system"]][monitor["id"]] = {
+                **monitor,
+                "stats": records.get(monitor["id"]),
+            }
         return probes
 
     async def _fetch_system_details(self):

@@ -1,7 +1,6 @@
 """Network probe sensors grouped in a single device per Beszel Hub."""
 
 from dataclasses import dataclass
-from math import isfinite
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -21,7 +20,13 @@ from .const import (
     ATTR_PROBE_TOTAL_COUNT,
     MANUFACTURER,
 )
-from .entity import BeszelEntity, entity_unique_id, mapping, network_probes_identifier
+from .entity import (
+    BeszelEntity,
+    as_number,
+    entity_unique_id,
+    mapping,
+    network_probes_identifier,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -58,28 +63,22 @@ PROBE_SENSOR_DESCRIPTIONS = (
 )
 
 
-def _number(value):
-    """Accept finite measurements, keeping absent or invalid values unknown."""
-    return (
-        value
-        if isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and isfinite(value)
-        else None
-    )
+def probe_max_age(interval):
+    """Return how many seconds a probe sample stays fresh for its interval."""
+    return max(300, (as_number(interval) or 0) + 120)
 
 
 def _probe_value(probe, key):
     stats = mapping(probe.get("stats"))
-    total = _number(stats.get(ATTR_PROBE_TOTAL_COUNT))
-    successes = _number(stats.get(ATTR_PROBE_SUCCESS_COUNT))
+    total = as_number(stats.get(ATTR_PROBE_TOTAL_COUNT))
+    successes = as_number(stats.get(ATTR_PROBE_SUCCESS_COUNT))
     if total is None or total <= 0 or successes is None or not 0 <= successes <= total:
         return None
     if key == "packet_loss":
         return round(100 * (total - successes) / total, 2)
     if successes == 0:
         return None
-    value = _number(stats.get(ATTR_PROBE_RES_SUM if key == "response_time" else key))
+    value = as_number(stats.get(ATTR_PROBE_RES_SUM if key == "response_time" else key))
     if value is None or value < 0:
         return None
     if key == "response_time":
@@ -124,13 +123,15 @@ class BeszelNetworkProbeSensor(BeszelEntity, SensorEntity):
             f"probe_{monitor_id}_{description.key}",
         )
         probe = self.probe
+        protocol = probe.get("protocol")
         target = str(probe.get("target", monitor_id))
-        if probe.get("protocol") == "tcp":
+        if protocol == "tcp":
             if ":" in target and not target.startswith("["):
                 target = f"[{target}]"
             target = f"{target}:{probe.get('port')}"
+        system = self.system_data.get("name", system_id)
         self._attr_translation_placeholders = {
-            "probe": f"{self.system_data.get('name', system_id)} {target} ({str(probe.get('protocol', '')).upper()})"
+            "probe": f"{system} {target} ({str(protocol or '').upper()})"
         }
 
     @property
@@ -148,13 +149,11 @@ class BeszelNetworkProbeSensor(BeszelEntity, SensorEntity):
         probe = self.probe
         if probe.get("enabled") is not True:
             return False
-        created = _number(mapping(probe.get("stats")).get(ATTR_PROBE_CREATED))
+        created = as_number(mapping(probe.get("stats")).get(ATTR_PROBE_CREATED))
         if created is None or created <= 0:
             return False
-        interval = _number(probe.get("interval"))
-        max_age = max(300, (interval or 0) + 120)
         age = dt_util.utcnow().timestamp() - created / 1000
-        return 0 <= age <= max_age
+        return 0 <= age <= probe_max_age(probe.get("interval"))
 
     @property
     def device_info(self):
@@ -164,7 +163,7 @@ class BeszelNetworkProbeSensor(BeszelEntity, SensorEntity):
                 network_probes_identifier(self.coordinator.config_entry.entry_id)
             },
             "manufacturer": MANUFACTURER,
-            "name": "Network Probes",
+            "translation_key": "network_probes",
             "configuration_url": f"{self.coordinator.api_client.host}/monitors",
         }
 

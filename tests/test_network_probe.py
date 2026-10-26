@@ -61,7 +61,7 @@ def test_discovery_groups_all_systems_per_hub_and_preserves_identities(
     assert len({sensor.unique_id for sensor in sensors}) == 8
     for sensor in sensors:
         assert sensor.device_info["identifiers"] == {(DOMAIN, "hub-one_network_probes")}
-        assert sensor.device_info["name"] == "Network Probes"
+        assert sensor.device_info["translation_key"] == "network_probes"
         assert sensor.device_info["configuration_url"] == "http://beszel.local/monitors"
         assert "example.com:443 (TCP)" in sensor.translation_placeholders["probe"]
         assert sensor.extra_state_attributes["system"] in ("one", "two")
