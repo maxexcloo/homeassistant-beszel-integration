@@ -89,21 +89,24 @@ class BeszelApiClient:
 
         raise BeszelApiAuthError("Authentication failed") from last_error
 
-    def _raise_if_unauthorised(self, err):
-        """Raise an authentication error when the Hub rejects the session."""
-        if err.status in (401, 403):
-            self._client.auth_store.clear()
-            raise BeszelApiAuthError(
-                "Token likely expired, re-authentication needed"
-            ) from err
-
-    async def async_get_latest_system_stats(self, system_id):
-        """Fetch the latest statistics record, including its source timestamp."""
+    async def _async_request(self, request):
+        """Run a blocking request with the authenticated client in a thread."""
         await self.async_authenticate()
         client = await self._async_client()
         try:
-            result = await asyncio.to_thread(
-                client.collection("system_stats").get_list,
+            return await asyncio.to_thread(request, client)
+        except ClientResponseError as err:
+            if err.status in (401, 403):
+                client.auth_store.clear()
+                raise BeszelApiAuthError(
+                    "Token likely expired, re-authentication needed"
+                ) from err
+            raise
+
+    async def async_get_latest_system_stats(self, system_id):
+        """Fetch the latest statistics record, including its source timestamp."""
+        result = await self._async_request(
+            lambda client: client.collection("system_stats").get_list(
                 1,
                 1,
                 query_params={
@@ -111,24 +114,16 @@ class BeszelApiClient:
                     "sort": "-created",
                 },
             )
-            if result.items:
-                return _record_fields(result.items[0])
-            return None
-        except ClientResponseError as err:
-            self._raise_if_unauthorised(err)
-            raise
+        )
+        if result.items:
+            return _record_fields(result.items[0])
+        return None
 
     async def async_get_system_details(self):
         """Fetch static system details keyed by system ID."""
-        await self.async_authenticate()
-        client = await self._async_client()
-        try:
-            records = await asyncio.to_thread(
-                client.collection("system_details").get_full_list,
-            )
-        except ClientResponseError as err:
-            self._raise_if_unauthorised(err)
-            raise
+        records = await self._async_request(
+            lambda client: client.collection("system_details").get_full_list()
+        )
         details = {}
         for record in records:
             fields = vars(record)
@@ -139,50 +134,37 @@ class BeszelApiClient:
 
     async def async_get_systems(self):
         """Fetch all systems from the Beszel Hub."""
-        await self.async_authenticate()
-        client = await self._async_client()
-        try:
-            records = await asyncio.to_thread(
-                client.collection("systems").get_full_list,
-                query_params={"sort": "-status,name"},
+        records = await self._async_request(
+            lambda client: client.collection("systems").get_full_list(
+                query_params={"sort": "-status,name"}
             )
-            return [vars(record) for record in records]
-        except ClientResponseError as err:
-            self._raise_if_unauthorised(err)
-            raise
+        )
+        return [vars(record) for record in records]
 
     async def async_get_network_monitors(self):
         """Fetch monitors, treating pre-0.20 Hubs as having no probes."""
-        await self.async_authenticate()
-        client = await self._async_client()
         try:
-            records = await asyncio.to_thread(
-                client.collection("network_monitors").get_full_list,
+            records = await self._async_request(
+                lambda client: client.collection("network_monitors").get_full_list()
             )
-            return [vars(record) for record in records]
         except ClientResponseError as err:
-            self._raise_if_unauthorised(err)
             if err.status == 404:
                 return []
             raise
+        return [vars(record) for record in records]
 
     async def async_get_latest_network_monitor_stats(self, since):
         """Fetch each monitor's latest one-minute sample created since a Unix ms time."""
-        await self.async_authenticate()
-        client = await self._async_client()
-        try:
-            records = await asyncio.to_thread(
-                _NetworkMonitorStatsService(
-                    client, "network_monitor_stats"
-                ).get_full_list,
+        records = await self._async_request(
+            lambda client: _NetworkMonitorStatsService(
+                client, "network_monitor_stats"
+            ).get_full_list(
                 query_params={
                     "filter": f'type="1m" && created>={int(since)}',
                     "sort": "-created",
                 },
             )
-        except ClientResponseError as err:
-            self._raise_if_unauthorised(err)
-            raise
+        )
         latest = {}
         for record in records:
             latest.setdefault(record.monitor, vars(record))
