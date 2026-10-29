@@ -43,6 +43,14 @@ class _NetworkMonitorStatsService(RecordService):
         return SimpleNamespace(**data)
 
 
+class _ContainerService(RecordService):
+    """Preserve the containers collection's numeric Unix millisecond updated."""
+
+    def decode(self, data):
+        """Do not use PocketBase's date-string decoder for container reports."""
+        return SimpleNamespace(**data)
+
+
 class BeszelApiClient:
     """Beszel API Client."""
 
@@ -139,6 +147,27 @@ class BeszelApiClient:
                 query_params={"sort": "-status,name"}
             )
         )
+        return [vars(record) for record in records]
+
+    async def async_get_containers(self):
+        """List container reports without decoding numeric updated as a date.
+
+        None means the collection is unsupported; [] is a successful empty list.
+        get_full_list handles pagination. Membership filtering is enforced by the
+        Hub and repeated against the visible system set by the coordinator.
+        """
+        try:
+            records = await self._async_request(
+                lambda client: _ContainerService(client, "containers").get_full_list(
+                    query_params={
+                        "fields": "id,system,name,image,health,cpu,memory,net,updated",
+                    },
+                )
+            )
+        except ClientResponseError as err:
+            if err.status == 404:
+                return None
+            raise
         return [vars(record) for record in records]
 
     async def async_get_network_monitors(self):

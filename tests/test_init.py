@@ -31,6 +31,7 @@ async def test_integration_setup_update_and_unload(hass, freezer):
     with patch("custom_components.beszel.BeszelApiClient", autospec=True) as api_class:
         api = api_class.return_value
         api.host = "http://beszel.local"
+        api.async_get_containers.return_value = []
         api.async_get_network_monitors.return_value = []
         api.async_get_systems = AsyncMock(
             return_value=[
@@ -76,7 +77,7 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         assert state("stats_g_0_u").state == "25.0"
         assert state("info_os").state == "Linux"
         assert state("info_u").state == "90"
-        assert len(er.async_entries_for_config_entry(registry, entry.entry_id)) == 10
+        assert len(er.async_entries_for_config_entry(registry, entry.entry_id)) == 11
         assert state("info_os").attributes.get("icon") == "mdi:linux"
         assert registry.async_get(state("info_os").entity_id).entity_category == (
             EntityCategory.DIAGNOSTIC
@@ -164,6 +165,7 @@ async def test_probe_device_is_discovered_updated_and_removable(hass, freezer):
     with patch("custom_components.beszel.BeszelApiClient", autospec=True) as api_class:
         api = api_class.return_value
         api.host = "http://beszel.local"
+        api.async_get_containers.return_value = []
         api.async_get_systems.return_value = [
             {"id": system, "name": system, "status": "up"} for system in ("one", "two")
         ]

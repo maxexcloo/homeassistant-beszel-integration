@@ -22,6 +22,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -69,10 +70,13 @@ from .const import (
     ATTR_TEMPERATURES,
     ATTR_THREADS,
     ATTR_UPTIME,
+    DOMAIN,
 )
+from .container import container_device_details, create_container_sensors
 from .entity import (
     BeszelEntity,
     as_number,
+    container_identifier,
     device_details,
     device_identifier,
     entity_unique_id,
@@ -81,6 +85,7 @@ from .entity import (
     os_name,
 )
 from .network_probe import create_network_probe_sensors
+from .report import statistics_timestamp
 
 ValueFunction = Callable[[dict[str, Any]], Any]
 
@@ -633,6 +638,12 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
     for system_id, raw_system_data in (coordinator.data or {}).items():
         system_data = mapping(raw_system_data)
 
+        timestamp_id = entity_unique_id(
+            coordinator.config_entry.entry_id, system_id, "stats_record_created"
+        )
+        if timestamp_id not in known_unique_ids:
+            entities.append(BeszelStatisticsTimestamp(coordinator, system_id))
+
         for description in (*INFO_SENSOR_DESCRIPTIONS, *STATS_SENSOR_DESCRIPTIONS):
             unique_id = _standard_unique_id(coordinator, system_id, description)
             if unique_id in known_unique_ids:
@@ -691,6 +702,7 @@ def _create_available_sensors(coordinator, known_unique_ids=None):
             entities.append(sensor)
 
     entities.extend(create_network_probe_sensors(coordinator, known_unique_ids))
+    entities.extend(create_container_sensors(coordinator, known_unique_ids))
     return entities
 
 
@@ -698,7 +710,35 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Beszel sensor entities based on a config entry."""
     coordinator = entry.runtime_data
     device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
     known_unique_ids = set()
+    retained_registry_unique_ids = set()
+
+    @callback
+    def async_entity_teardown(unique_id):
+        entity_id = entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+        if entity_id is None:
+            known_unique_ids.discard(unique_id)
+        else:
+            # Disabled additions also invoke teardown; their registry entries
+            # must remain known. Remember them because later registry removal
+            # has no active entity left to invoke another teardown callback.
+            retained_registry_unique_ids.add(unique_id)
+
+    @callback
+    def async_registry_updated(event):
+        if event.data["action"] != "remove":
+            return
+        # Only reconcile IDs whose teardown already confirmed registration,
+        # never pending additions. Unique IDs survive entity_id renames.
+        for unique_id in tuple(retained_registry_unique_ids):
+            if entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id) is None:
+                retained_registry_unique_ids.discard(unique_id)
+                known_unique_ids.discard(unique_id)
+
+    entry.async_on_unload(
+        hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, async_registry_updated)
+    )
 
     def update_registered_devices():
         for system_id, raw_system_data in (coordinator.data or {}).items():
@@ -719,13 +759,58 @@ async def async_setup_entry(hass, entry, async_add_entities):
     @callback
     def async_discover_entities():
         update_registered_devices()
+        for system_id, system in (coordinator.data or {}).items():
+            for container_id, report in mapping(system.get("containers")).items():
+                device = device_registry.async_get_device_by_identifier(
+                    container_identifier(entry.entry_id, system_id, container_id),
+                    entry.entry_id,
+                )
+                if device is not None:
+                    changes = {
+                        key: value
+                        for key, value in container_device_details(
+                            container_id, report
+                        ).items()
+                        if getattr(device, key) != value
+                    }
+                    if changes:
+                        device_registry.async_update_device(device.id, **changes)
         new_entities = _create_available_sensors(coordinator, known_unique_ids)
         if new_entities:
             known_unique_ids.update(entity.unique_id for entity in new_entities)
+            for entity in new_entities:
+                entity.async_on_remove(
+                    lambda unique_id=entity.unique_id: async_entity_teardown(unique_id)
+                )
             async_add_entities(new_entities)
 
     async_discover_entities()
     entry.async_on_unload(coordinator.async_add_listener(async_discover_entities))
+
+
+class BeszelStatisticsTimestamp(BeszelEntity, SensorEntity):
+    """The Hub statistics record creation time, not the agent measurement time."""
+
+    entity_description = SensorEntityDescription(
+        key="stats_record_created",
+        translation_key="stats_record_created",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    )
+
+    def __init__(self, coordinator, system_id):
+        """Keep host identity unchanged and add one new diagnostic unique ID."""
+        super().__init__(coordinator, system_id)
+        self._attr_unique_id = entity_unique_id(
+            coordinator.config_entry.entry_id, system_id, "stats_record_created"
+        )
+
+    @property
+    def native_value(self):
+        """Keep an old valid record time visible; reject missing/future times."""
+        return statistics_timestamp(
+            self.system_data.get("stats_created"), dt_util.utcnow()
+        )
 
 
 class BeszelCoordinatorSensor(BeszelEntity, SensorEntity):

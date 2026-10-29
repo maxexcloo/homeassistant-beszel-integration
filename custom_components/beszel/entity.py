@@ -33,6 +33,11 @@ def network_probes_identifier(entry_id):
     return (DOMAIN, f"{entry_id}_network_probes")
 
 
+def container_identifier(entry_id, system_id, container_id):
+    """Identify a runtime container instance within its host and config entry."""
+    return (DOMAIN, f"{entry_id}_{system_id}_container_{container_id}")
+
+
 def os_name(value):
     """Return the operating-system name for a Beszel type code."""
     return OPERATING_SYSTEMS.get(value, (None, None))[0]
