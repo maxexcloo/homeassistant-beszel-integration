@@ -12,6 +12,8 @@ Requires Home Assistant 2026.10.4 or newer and Beszel 0.18.0 or newer.
 
 - Battery level and charging state.
 - Configurable update interval.
+- Host statistics record timestamps and container last-report timestamps.
+- Container instance health, CPU, memory and total network rate.
 - CPU model, topology, and utilisation.
 - Diagnostics download with credentials redacted.
 - Disk capacity, throughput, latency, and I/O utilisation.
@@ -119,6 +121,50 @@ before running local Mise tasks.
 4. Submit a pull request with tests and documentation for behavioural changes.
 
 GitHub CI also runs HACS and Hassfest validation.
+
+## Container reports and freshness
+
+Each reported container instance has a child device under its Beszel host, with
+health, CPU usage, memory used, total network rate and a diagnostic Last Hub report
+timestamp. New instances appear on later polls without reloading the integration.
+Memory is converted from Beszel's MiB to decimal MB. Total network rate is bytes
+per second, already calculated by Beszel; it is not a cumulative counter.
+
+The Last statistics record diagnostic on each host is the creation time of its
+latest one-minute Hub statistics record. Last Hub report is the numeric receipt
+time stored by the Hub for that container. Neither is the agent's exact measurement
+time, and successful HA polling never refreshes those timestamps.
+
+The existing host measurement guard remains unchanged: host up, valid aware record
+time, and age from zero through five minutes inclusive. Container health and
+metrics independently require host up and a valid container receipt time within
+five minutes. Valid old diagnostic timestamps remain visible, including when the
+host is down. Missing, malformed and future timestamps are unknown. A failed Hub
+update or an absent host/container makes the corresponding entities unavailable.
+Partial container query failures retain cached values and their original times;
+a successful empty inventory clears them. Missing values are never converted to
+zero. A container-only query failure does not prevent host/probe updates.
+
+Health distinguishes starting, healthy, unhealthy, no health data and unknown.
+Beszel health code zero means no usable health data; it does not mean healthy.
+Normal Beszel discovery covers running containers and can omit containers whose
+statistics failed. Absence therefore never means stopped, and this integration
+does not expose a running/stopped binary sensor.
+
+Identity includes the HA entry, Beszel host and runtime container ID. Renaming an
+instance updates its name/image metadata without changing entity IDs. Recreating
+a container creates new entities even when its name is unchanged. This is not a
+stable service identity or an expected-service inventory. Removed instances retain
+registry history; manual device removal is allowed after confirmed non-reporting,
+not during partial failures. A collection 404 disables container discovery without
+failing host updates; 401/403 still request reauthentication.
+
+The integration only lists container records visible to its existing Hub account.
+It does not query Docker directly or read container logs/inspect data. No account
+privilege increase is required. Lifecycle counters, OOM/exit evidence, required
+mount checks, stable logical workload identity and exact agent observation times
+remain outside this feature. These entities also do not implement MQTT expiry or
+ACLs, independent service probes, or suspected-stall diagnostics.
 
 ## Licence
 

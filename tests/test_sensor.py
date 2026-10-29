@@ -154,7 +154,8 @@ class TestBeszelSensor:
         }
         sensors = _create_available_sensors(coordinator)
         assert {sensor.unique_id for sensor in sensors} == {
-            "beszel_entry_system_status_status"
+            "beszel_entry_system_status_status",
+            "beszel_entry_system_stats_record_created",
         }
 
     def test_nested_sensors_keep_ids_metadata_and_live_values(self):
@@ -230,7 +231,8 @@ class TestBeszelSensor:
         await async_setup_entry(hass, entry, async_add_entities)
         initial_entities = async_add_entities.call_args.args[0]
         assert {entity.unique_id for entity in initial_entities} == {
-            "beszel_entry_system_status_status"
+            "beszel_entry_system_status_status",
+            "beszel_entry_system_stats_record_created",
         }
         coordinator.data["system"]["stats"] = {"cpu": 12.5}
         listener = coordinator.async_add_listener.call_args.args[0]

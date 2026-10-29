@@ -20,6 +20,10 @@ class FakeApiClient:
     async def async_authenticate(self):
         """Authenticate successfully."""
 
+    async def async_get_containers(self):
+        """Return a complete empty container inventory by default."""
+        return []
+
     async def async_get_latest_system_stats(self, system_id):
         """Return stats or fail for one system."""
         if system_id == "failed":
@@ -44,6 +48,59 @@ class FakeApiClient:
 
 class TestBeszelDataUpdateCoordinator:
     """Exercise Beszel coordinator update behaviour."""
+
+    async def test_container_inventory_cache_scope_and_empty(self, hass):
+        api = FakeApiClient()
+        sample = {"id": "abcdef", "system": "healthy", "updated": 1234, "health": 2}
+        api.async_get_containers = AsyncMock(
+            return_value=[
+                sample,
+                {"id": "orphan", "system": "not-visible", "updated": 1234},
+            ]
+        )
+        coordinator = BeszelDataUpdateCoordinator(
+            hass, api_client=api, config_entry=MockConfigEntry(domain=DOMAIN)
+        )
+        data = await coordinator._async_update_data()
+        assert coordinator.container_inventory_complete
+        assert data["healthy"]["containers"] == {"abcdef": sample}
+        assert data["failed"]["containers"] == {}
+        coordinator.data = data
+        api.async_get_containers.side_effect = RuntimeError("timeout")
+        cached = await coordinator._async_update_data()
+        assert not coordinator.container_inventory_complete
+        assert cached["healthy"]["containers"] == {"abcdef": sample}
+        assert cached["healthy"]["stats"] == {"cpu": 12.5}
+        api.async_get_containers.side_effect = None
+        api.async_get_containers.return_value = []
+        empty = await coordinator._async_update_data()
+        assert coordinator.container_inventory_complete
+        assert empty["healthy"]["containers"] == {}
+        api.async_get_containers.return_value = None
+        assert (await coordinator._async_update_data())["healthy"]["containers"] == {}
+        assert not coordinator.container_inventory_complete
+
+    async def test_container_authentication_failure_and_invalid_inventory(self, hass):
+        api = FakeApiClient()
+        api.async_get_containers = AsyncMock(side_effect=BeszelApiAuthError("expired"))
+        coordinator = BeszelDataUpdateCoordinator(
+            hass, api_client=api, config_entry=MockConfigEntry(domain=DOMAIN)
+        )
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()
+        api.async_get_containers.side_effect = None
+        cached = {"abcdef": {"id": "abcdef", "system": "healthy", "updated": 1}}
+        coordinator.data = {"healthy": {"containers": cached}}
+        for records in (
+            {},
+            [None],
+            [{"id": "", "system": "healthy"}],
+            [{"id": "abcdef", "system": "healthy"}] * 2,
+        ):
+            api.async_get_containers.return_value = records
+            data = await coordinator._async_update_data()
+            assert data["healthy"]["containers"] == cached
+            assert not coordinator.container_inventory_complete
 
     async def test_probe_failures_preserve_cache_and_do_not_block_system_stats(
         self, hass, caplog

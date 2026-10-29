@@ -13,6 +13,132 @@ from custom_components.beszel.api import BeszelApiAuthError, BeszelApiClient
 class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
     """Exercise Beszel API authentication behaviour."""
 
+    async def test_container_auth_failure_reauthenticates_on_next_request(self):
+        """Clear rejected sessions, then reauthenticate without an implicit retry."""
+        for status in (401, 403):
+            with self.subTest(status=status):
+                pocketbase = MagicMock()
+                pocketbase.auth_store.token = ""
+                pocketbase.auth_store.clear.side_effect = lambda pb=pocketbase: setattr(
+                    pb.auth_store, "token", ""
+                )
+                authentication = pocketbase.collection.return_value
+                authentication.auth_with_password.side_effect = (
+                    lambda *_, pb=pocketbase: setattr(pb.auth_store, "token", "token")
+                )
+                empty = {
+                    "page": 1,
+                    "perPage": 500,
+                    "totalItems": 0,
+                    "totalPages": 1,
+                    "items": [],
+                }
+                pocketbase.send.side_effect = [
+                    ClientResponseError(status=status),
+                    empty,
+                    empty,
+                ]
+                with (
+                    patch(
+                        "custom_components.beszel.api.PocketBase",
+                        return_value=pocketbase,
+                    ),
+                    patch(
+                        "custom_components.beszel.api.validate_token", return_value=True
+                    ),
+                ):
+                    client = BeszelApiClient("beszel.local", "user", "password")
+                    with self.assertRaises(BeszelApiAuthError):
+                        await client.async_get_containers()
+                    assert pocketbase.send.call_count == 1
+                    assert pocketbase.auth_store.token == ""
+                    assert await client.async_get_containers() == []
+                    assert await client.async_get_containers() == []
+                assert authentication.auth_with_password.call_count == 2
+                assert pocketbase.send.call_count == 3
+                pocketbase.auth_store.clear.assert_called_once_with()
+
+    async def test_container_authentication_failure_never_reads_inventory(self):
+        """Authentication errors propagate before collection reads can occur."""
+        for error in (BeszelApiAuthError("Rejected"), ClientResponseError(status=503)):
+            with self.subTest(error=type(error).__name__):
+                pocketbase = MagicMock()
+                with patch(
+                    "custom_components.beszel.api.PocketBase", return_value=pocketbase
+                ):
+                    client = BeszelApiClient("beszel.local", "user", "password")
+                    client.async_authenticate = AsyncMock(side_effect=error)
+                    with self.assertRaises(type(error)) as raised:
+                        await client.async_get_containers()
+                assert raised.exception is error
+                pocketbase.send.assert_not_called()
+
+    async def test_containers_preserve_numeric_time_and_paginate(self):
+        """Use list access and decode every page without interpreting updated."""
+        first = {"id": "abcdef", "system": "one", "updated": 1793145600000}
+        second = {"id": "123456", "system": "two", "updated": 1793145600123}
+        pocketbase = MagicMock()
+        pocketbase.send.side_effect = [
+            {
+                "page": 1,
+                "perPage": 1,
+                "totalItems": 2,
+                "totalPages": 2,
+                "items": [first],
+            },
+            {
+                "page": 2,
+                "perPage": 1,
+                "totalItems": 2,
+                "totalPages": 2,
+                "items": [second],
+            },
+            {"page": 3, "perPage": 1, "totalItems": 2, "totalPages": 2, "items": []},
+        ]
+        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
+            client = BeszelApiClient("beszel.local", "user", "password")
+            client.async_authenticate = AsyncMock()
+            # Exercise RecordService pagination with a one-record batch size.
+            from custom_components.beszel.api import _ContainerService
+
+            original = _ContainerService.get_full_list
+
+            def small_pages(service, **kwargs):
+                return original(service, batch=1, **kwargs)
+
+            with patch.object(_ContainerService, "get_full_list", small_pages):
+                assert await client.async_get_containers() == [first, second]
+            for call in pocketbase.send.call_args_list:
+                path, options = call.args
+                assert path == "/api/collections/containers/records"
+                assert (
+                    options["params"]["fields"]
+                    == "id,system,name,image,health,cpu,memory,net,updated"
+                )
+
+    async def test_container_errors_are_not_empty_inventory(self):
+        """Only 404 means unsupported; authorization always triggers reauth."""
+        for status in (404, 401, 403, 429, 500):
+            with self.subTest(status=status):
+                pocketbase = MagicMock()
+                pocketbase.send.side_effect = ClientResponseError(status=status)
+                with patch(
+                    "custom_components.beszel.api.PocketBase", return_value=pocketbase
+                ):
+                    client = BeszelApiClient("beszel.local", "user", "password")
+                    client.async_authenticate = AsyncMock()
+                    if status == 404:
+                        assert await client.async_get_containers() is None
+                    else:
+                        error = (
+                            BeszelApiAuthError
+                            if status in (401, 403)
+                            else ClientResponseError
+                        )
+                        with self.assertRaises(error):
+                            await client.async_get_containers()
+                    assert pocketbase.auth_store.clear.called is (status in (401, 403))
+
     async def test_network_monitors_and_latest_stats_query(self):
         """Query the newest probe record without losing its numeric timestamp."""
         monitors = MagicMock()

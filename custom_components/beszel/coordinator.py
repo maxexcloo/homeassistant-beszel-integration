@@ -61,18 +61,22 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             ),
         )
         self._details = {}
+        self.container_inventory_complete = False
         self.api_client = api_client
 
     async def _async_update_data(self):
         """Fetch data from API endpoint."""
+        self.container_inventory_complete = False
         try:
             systems = await self.api_client.async_get_systems()
             if not systems:
+                self.container_inventory_complete = True
                 _LOGGER.info("No systems found on Beszel Hub %s", self.api_client.host)
                 return {}
 
             details = await self._fetch_system_details()
             probes = await self._fetch_network_probes(systems)
+            containers = await self._fetch_containers(systems)
             records = await asyncio.gather(
                 *(
                     self.api_client.async_get_latest_system_stats(system["id"])
@@ -101,6 +105,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                         "stats": cached.get("stats"),
                     }
                 all_system_data[system_id] = {
+                    "containers": containers.get(system_id, {}),
                     "info": _merge_system_info(
                         system.get("info"), details.get(system_id, {})
                     ),
@@ -121,6 +126,46 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(
                 f"Error communicating with Beszel Hub {self.api_client.host}: {err}"
             ) from err
+
+    async def _fetch_containers(self, systems):
+        """Keep reports and their original receipt times on partial failure."""
+        cached = {
+            system["id"]: (self.data or {}).get(system["id"], {}).get("containers", {})
+            for system in systems
+        }
+        try:
+            records = await self.api_client.async_get_containers()
+            if records is None:
+                return {system_id: {} for system_id in cached}
+            if not isinstance(records, list):
+                raise TypeError("Invalid container inventory")
+            containers = {system_id: {} for system_id in cached}
+            for record in records:
+                if not isinstance(record, dict):
+                    raise TypeError("Invalid container record")
+                system_id = record.get("system")
+                container_id = record.get("id")
+                if not isinstance(system_id, str) or not isinstance(container_id, str):
+                    raise TypeError("Invalid container identity")
+                if not container_id:
+                    raise ValueError("Empty container identity")
+                if system_id not in containers:
+                    continue
+                if container_id in containers[system_id]:
+                    raise ValueError("Duplicate container identity")
+                containers[system_id][container_id] = record
+            self.container_inventory_complete = True
+            return containers
+        except BeszelApiAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - containers are best-effort
+            _LOGGER.warning(
+                "Error fetching containers from Beszel Hub %s for systems %s: %s",
+                self.api_client.host,
+                ", ".join(f"{s.get('name', s['id'])} ({s['id']})" for s in systems),
+                err,
+            )
+            return cached
 
     async def _fetch_network_probes(self, systems):
         """Fetch probes independently, preserving each failed sample's cache."""

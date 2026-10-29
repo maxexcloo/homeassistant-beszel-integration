@@ -63,6 +63,31 @@
   },
   "entity": {
     "sensor": {
+      "stats_record_created": {
+        "name": "Last statistics record"
+      },
+      "container_last_report": {
+        "name": "Last Hub report"
+      },
+      "container_health": {
+        "name": "Health",
+        "state": {
+          "no_health_data": "No health data",
+          "starting": "Starting",
+          "healthy": "Healthy",
+          "unhealthy": "Unhealthy",
+          "unknown": "Unknown"
+        }
+      },
+      "container_cpu": {
+        "name": "CPU usage"
+      },
+      "container_memory": {
+        "name": "Memory used"
+      },
+      "container_network": {
+        "name": "Total network rate"
+      },
       "agent_version": {
         "name": "Agent Version"
       },
