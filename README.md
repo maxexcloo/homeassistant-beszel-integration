@@ -12,6 +12,7 @@ Requires Home Assistant 2026.10.4 or newer and Beszel 0.18.0 or newer.
 
 - Battery level and charging state.
 - Configurable update interval.
+- Container CPU, memory, network and health sensors in a device per container.
 - CPU model, topology, and utilisation.
 - Diagnostics download with credentials redacted.
 - Disk capacity, throughput, latency, and I/O utilisation.
@@ -83,6 +84,16 @@ longer **Update Interval**, up to 60 minutes.
 Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication
 expires.
+
+### Containers
+
+Each container Beszel reports gets its own device under its system, with CPU usage,
+memory used, combined network speed, health and a diagnostic last-report time. New
+containers are discovered during later updates without reloading. Measurements are
+available while the system is up and the container's latest report is no more than
+five minutes old. Health shows **No Health Check** for containers without a Docker
+health check. Recreated containers get new devices; remove old ones from their
+device page once Beszel no longer reports them.
 
 ### Network Probes
 

@@ -80,6 +80,27 @@
           "unknown": "Unknown"
         }
       },
+      "container_cpu_usage": {
+        "name": "CPU Usage"
+      },
+      "container_health": {
+        "name": "Health",
+        "state": {
+          "healthy": "Healthy",
+          "none": "No Health Check",
+          "starting": "Starting",
+          "unhealthy": "Unhealthy"
+        }
+      },
+      "container_last_report": {
+        "name": "Last Report"
+      },
+      "container_memory_used": {
+        "name": "Memory Used"
+      },
+      "container_network_speed": {
+        "name": "Network Speed"
+      },
       "cpu_cores": {
         "name": "CPU Cores"
       },

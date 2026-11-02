@@ -18,6 +18,11 @@ def mapping(value):
     return value if isinstance(value, dict) else {}
 
 
+def container_identifier(entry_id, system_id, container_id):
+    """Return the device registry identifier for a container on a Beszel system."""
+    return (DOMAIN, f"{entry_id}_{system_id}_container_{container_id}")
+
+
 def device_identifier(entry_id, system_id):
     """Return the device registry identifier for a Beszel system."""
     return (DOMAIN, f"{entry_id}_{system_id}")
