@@ -1,5 +1,7 @@
 """Constants for the Beszel integration."""
 
+from datetime import timedelta
+
 from homeassistant.const import Platform
 
 CONF_UPDATE_INTERVAL = "update_interval"
@@ -7,6 +9,8 @@ DEFAULT_UPDATE_INTERVAL = 1
 DOMAIN = "beszel"
 MANUFACTURER = "Beszel"
 PLATFORMS = [Platform.SENSOR]
+# Statistics records older than this no longer describe the system's current state.
+STATS_MAX_AGE = timedelta(minutes=5)
 
 # Beszel OS type codes mapped to display names and icons
 OPERATING_SYSTEMS = {

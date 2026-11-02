@@ -103,21 +103,20 @@ class BeszelApiClient:
                 ) from err
             raise
 
-    async def async_get_latest_system_stats(self, system_id):
-        """Fetch the latest statistics record, including its source timestamp."""
-        result = await self._async_request(
-            lambda client: client.collection("system_stats").get_list(
-                1,
-                1,
+    async def async_get_latest_system_stats(self, since):
+        """Fetch each system's latest one-minute record created since a UTC time."""
+        records = await self._async_request(
+            lambda client: client.collection("system_stats").get_full_list(
                 query_params={
-                    "filter": f'system="{system_id}" && type="1m"',
+                    "filter": f'type="1m" && created>="{since:%Y-%m-%d %H:%M:%S}.000Z"',
                     "sort": "-created",
                 },
             )
         )
-        if result.items:
-            return _record_fields(result.items[0])
-        return None
+        latest = {}
+        for record in records:
+            latest.setdefault(record.system, _record_fields(record))
+        return latest
 
     async def async_get_system_details(self):
         """Fetch static system details keyed by system ID."""

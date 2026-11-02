@@ -1,7 +1,7 @@
 """Tests for the Beszel API client."""
 
 import unittest
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -152,46 +152,40 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
         superusers.auth_with_password.assert_called_once_with("user", "password")
         users.auth_with_password.assert_not_called()
 
-    async def test_missing_latest_statistics_returns_none(self):
-        """The absence of a statistics record remains unavailable data."""
-        collection = MagicMock()
-        collection.get_list.return_value = SimpleNamespace(items=[])
-        pocketbase = MagicMock()
-        pocketbase.collection.return_value = collection
-
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            client.async_authenticate = AsyncMock()
-            result = await client.async_get_latest_system_stats("system")
-
-        self.assertIsNone(result)
-
-    async def test_latest_statistics_query_one_minute_records(self):
-        """Longer averaged records must not replace the latest live sample."""
+    async def test_latest_statistics_query_recent_one_minute_records(self):
+        """Fetch recent one-minute records once and keep each system's newest."""
         collection = MagicMock()
         # PocketBase returns record timestamps as naive UTC datetimes.
-        collection.get_list.return_value = SimpleNamespace(
-            items=[
-                SimpleNamespace(stats={"cpu": 12.5}, created=datetime(2026, 10, 22, 1))
-            ]
-        )
+        collection.get_full_list.return_value = [
+            SimpleNamespace(
+                system="one", stats={"cpu": 2}, created=datetime(2026, 10, 22, 1, 1)
+            ),
+            SimpleNamespace(
+                system="one", stats={"cpu": 1}, created=datetime(2026, 10, 22, 1)
+            ),
+            SimpleNamespace(
+                system="two", stats={"cpu": 3}, created=datetime(2026, 10, 22, 1)
+            ),
+        ]
         pocketbase = MagicMock()
         pocketbase.collection.return_value = collection
 
         with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
             client = BeszelApiClient("beszel.local", "user", "password")
             client.async_authenticate = AsyncMock()
-            result = await client.async_get_latest_system_stats("system")
+            result = await client.async_get_latest_system_stats(
+                datetime(2026, 10, 22, 0, 56, tzinfo=UTC)
+            )
 
         self.assertEqual(
-            result, {"stats": {"cpu": 12.5}, "created": "2026-10-22T01:00:00+00:00"}
+            {system: record["stats"] for system, record in result.items()},
+            {"one": {"cpu": 2}, "two": {"cpu": 3}},
         )
+        self.assertEqual(result["one"]["created"], "2026-10-22T01:01:00+00:00")
         pocketbase.collection.assert_called_once_with("system_stats")
-        collection.get_list.assert_called_once_with(
-            1,
-            1,
+        collection.get_full_list.assert_called_once_with(
             query_params={
-                "filter": 'system="system" && type="1m"',
+                "filter": 'type="1m" && created>="2026-10-22 00:56:00.000Z"',
                 "sort": "-created",
             },
         )
@@ -199,7 +193,7 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_statistics_authentication_failure_is_raised(self):
         """An expired statistics token is exposed as an authentication error."""
         collection = MagicMock()
-        collection.get_list.side_effect = ClientResponseError(status=401)
+        collection.get_full_list.side_effect = ClientResponseError(status=401)
         pocketbase = MagicMock()
         pocketbase.collection.return_value = collection
 
@@ -207,7 +201,7 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             client = BeszelApiClient("beszel.local", "user", "password")
             client.async_authenticate = AsyncMock()
             with self.assertRaises(BeszelApiAuthError):
-                await client.async_get_latest_system_stats("system")
+                await client.async_get_latest_system_stats(datetime.now(UTC))
 
         pocketbase.auth_store.clear.assert_called_once_with()
 
@@ -240,7 +234,7 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             pocketbase.auth_store, "token", "token"
         )
         statistics = MagicMock()
-        statistics.get_list.return_value = SimpleNamespace(items=[])
+        statistics.get_full_list.return_value = []
         pocketbase.collection.side_effect = {
             "_superusers": authentication,
             "system_stats": statistics,
@@ -250,8 +244,8 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             patch("custom_components.beszel.api.validate_token", return_value=True),
         ):
             client = BeszelApiClient("beszel.local", "user", "password")
-            assert await client.async_get_latest_system_stats("system") is None
-            assert await client.async_get_latest_system_stats("system") is None
+            assert await client.async_get_latest_system_stats(datetime.now(UTC)) == {}
+            assert await client.async_get_latest_system_stats(datetime.now(UTC)) == {}
 
         authentication.auth_with_password.assert_called_once_with("user", "password")
-        assert statistics.get_list.call_count == 2
+        assert statistics.get_full_list.call_count == 2

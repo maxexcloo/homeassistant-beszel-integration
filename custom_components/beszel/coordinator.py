@@ -17,6 +17,7 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    STATS_MAX_AGE,
 )
 from .network_probe import probe_max_age
 
@@ -29,6 +30,13 @@ _DETAILS_TO_INFO = {
     "kernel": ATTR_KERNEL_VERSION,
     "os": ATTR_OS,
 }
+
+
+def _system_names(systems):
+    """Describe systems by name and ID for log messages."""
+    return ", ".join(
+        f"{system.get('name', system['id'])} ({system['id']})" for system in systems
+    )
 
 
 def _merge_system_info(info, details):
@@ -71,43 +79,24 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("No systems found on Beszel Hub %s", self.api_client.host)
                 return {}
 
-            details = await self._fetch_system_details()
-            probes = await self._fetch_network_probes(systems)
-            records = await asyncio.gather(
-                *(
-                    self.api_client.async_get_latest_system_stats(system["id"])
-                    for system in systems
-                ),
-                return_exceptions=True,
+            details, probes, records = await asyncio.gather(
+                self._fetch_system_details(),
+                self._fetch_network_probes(systems),
+                self._fetch_system_stats(systems),
             )
 
             all_system_data = {}
-            for system, record in zip(systems, records, strict=True):
+            for system in systems:
                 system_id = system["id"]
-                name = system.get("name", system_id)
-                if isinstance(record, (asyncio.CancelledError, BeszelApiAuthError)):
-                    raise record
-                if isinstance(record, Exception):
-                    _LOGGER.error(
-                        "Error fetching data from Beszel Hub %s for system %s (%s): %s",
-                        self.api_client.host,
-                        name,
-                        system_id,
-                        record,
-                    )
-                    cached = (self.data or {}).get(system_id, {})
-                    record = {
-                        "created": cached.get("stats_created"),
-                        "stats": cached.get("stats"),
-                    }
+                record = records.get(system_id, {})
                 all_system_data[system_id] = {
                     "info": _merge_system_info(
                         system.get("info"), details.get(system_id, {})
                     ),
-                    "name": name,
+                    "name": system.get("name", system_id),
                     "network_probes": probes.get(system_id, {}),
-                    "stats": record.get("stats") if record else None,
-                    "stats_created": record.get("created") if record else None,
+                    "stats": record.get("stats"),
+                    "stats_created": record.get("created"),
                     "status": system.get("status", "unknown"),
                 }
 
@@ -130,9 +119,6 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             .get("network_probes", {})
             for system in systems
         }
-        system_names = ", ".join(
-            f"{system.get('name', system['id'])} ({system['id']})" for system in systems
-        )
         try:
             monitors = await self.api_client.async_get_network_monitors()
         except BeszelApiAuthError:
@@ -141,7 +127,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(
                 "Error fetching network monitors from Beszel Hub %s for systems %s: %s",
                 self.api_client.host,
-                system_names,
+                _system_names(systems),
                 err,
             )
             return cached
@@ -164,7 +150,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 "Error fetching network probe statistics from Beszel Hub %s "
                 "for systems %s: %s",
                 self.api_client.host,
-                system_names,
+                _system_names(systems),
                 err,
             )
             records = {
@@ -193,3 +179,26 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 err,
             )
         return self._details
+
+    async def _fetch_system_stats(self, systems):
+        """Fetch fresh statistics records, reusing cached records on failure."""
+        try:
+            return await self.api_client.async_get_latest_system_stats(
+                dt_util.utcnow() - STATS_MAX_AGE
+            )
+        except BeszelApiAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - statistics keep their cache
+            _LOGGER.error(
+                "Error fetching statistics from Beszel Hub %s for systems %s: %s",
+                self.api_client.host,
+                _system_names(systems),
+                err,
+            )
+            return {
+                system_id: {
+                    "created": system.get("stats_created"),
+                    "stats": system.get("stats"),
+                }
+                for system_id, system in (self.data or {}).items()
+            }
