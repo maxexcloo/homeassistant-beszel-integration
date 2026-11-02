@@ -47,7 +47,7 @@ def probe_sensors(coordinator):
     """Select just the probe sensors from normal platform discovery."""
     return [
         sensor
-        for sensor in _create_available_sensors(coordinator)
+        for sensor in _create_available_sensors(coordinator, set())
         if "_probe_" in sensor.unique_id
     ]
 
@@ -67,7 +67,8 @@ def test_discovery_groups_all_systems_per_hub_and_preserves_identities(
         assert sensor.extra_state_attributes["system"] in ("one", "two")
         assert sensor.available
     known_ids = {
-        sensor.unique_id for sensor in _create_available_sensors(probe_coordinator)
+        sensor.unique_id
+        for sensor in _create_available_sensors(probe_coordinator, set())
     }
     assert _create_available_sensors(probe_coordinator, known_ids) == []
     probe_coordinator.data["one"]["network_probes"]["new"] = deepcopy(

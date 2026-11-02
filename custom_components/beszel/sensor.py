@@ -627,13 +627,10 @@ def _temperature_unique_id(coordinator, system_id, temperature_key):
     )
 
 
-def _create_available_sensors(coordinator, known_unique_ids=None):
+def _create_available_sensors(coordinator, known_unique_ids):
     """Create sensors for newly reported Beszel values."""
-    known_unique_ids = known_unique_ids or set()
     entities = []
-    for system_id, raw_system_data in (coordinator.data or {}).items():
-        system_data = mapping(raw_system_data)
-
+    for system_id, system_data in coordinator.data.items():
         for description in (*INFO_SENSOR_DESCRIPTIONS, *STATS_SENSOR_DESCRIPTIONS):
             unique_id = _standard_unique_id(coordinator, system_id, description)
             if unique_id in known_unique_ids:
@@ -702,13 +699,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
     known_unique_ids = set()
 
     def update_registered_devices():
-        for system_id, raw_system_data in (coordinator.data or {}).items():
+        for system_id, system_data in coordinator.data.items():
             device = device_registry.async_get_device_by_identifier(
                 device_identifier(entry.entry_id, system_id), entry.entry_id
             )
             if device is None:
                 continue
-            details = device_details(system_id, mapping(raw_system_data))
+            details = device_details(system_id, system_data)
             changes = {
                 key: value
                 for key, value in details.items()
@@ -749,7 +746,7 @@ class BeszelCoordinatorSensor(BeszelEntity, SensorEntity):
             dt_util.parse_datetime(created) if isinstance(created, str) else None
         )
         return (
-            str(self.system_data.get("status")).lower() == "up"
+            self.is_up
             and timestamp is not None
             and timestamp.tzinfo is not None
             and timedelta(0) <= dt_util.utcnow() - timestamp <= STATS_MAX_AGE

@@ -25,7 +25,7 @@ class TestBeszelSensor:
         coordinator.data = {"system": {"stats": stats}}
         by_id = {
             sensor.unique_id: sensor
-            for sensor in _create_available_sensors(coordinator)
+            for sensor in _create_available_sensors(coordinator, set())
         }
         for suffix in ["m", "efs_data_d"]:
             sensor = by_id["beszel_entry_system_stats_" + suffix]
@@ -66,7 +66,7 @@ class TestBeszelSensor:
         }
         sensor = next(
             sensor
-            for sensor in _create_available_sensors(coordinator)
+            for sensor in _create_available_sensors(coordinator, set())
             if sensor.unique_id.endswith("_stats_cpu")
         )
         with patch("custom_components.beszel.sensor.dt_util.utcnow", return_value=now):
@@ -97,7 +97,7 @@ class TestBeszelSensor:
         coordinator.data = {"system": {"stats": stats}}
         by_id = {
             sensor.unique_id: sensor
-            for sensor in _create_available_sensors(coordinator)
+            for sensor in _create_available_sensors(coordinator, set())
         }
         assert {
             suffix: by_id[f"beszel_entry_system_stats_{suffix}"].native_value
@@ -117,7 +117,7 @@ class TestBeszelSensor:
                 "stats": {"cpu": 12.5},
             }
         }
-        sensors = _create_available_sensors(coordinator)
+        sensors = _create_available_sensors(coordinator, set())
         unique_ids = {sensor.unique_id for sensor in sensors}
         assert "beszel_entry_system_stats_cpu" in unique_ids
         assert "beszel_entry_system_stats_dr" not in unique_ids
@@ -152,7 +152,7 @@ class TestBeszelSensor:
                 "stats": {"efs": {"disk": None}, "g": {"0": None}, "t": []},
             }
         }
-        sensors = _create_available_sensors(coordinator)
+        sensors = _create_available_sensors(coordinator, set())
         assert {sensor.unique_id for sensor in sensors} == {
             "beszel_entry_system_status_status"
         }
@@ -166,7 +166,7 @@ class TestBeszelSensor:
             "g": {"0": {"n": "Graphics", "u": 25}, "1": {"u": 0}},
         }
         coordinator.data = {"system": {"stats": stats}}
-        sensors = _create_available_sensors(coordinator)
+        sensors = _create_available_sensors(coordinator, set())
         by_id = {sensor.unique_id: sensor for sensor in sensors}
         filesystem = by_id["beszel_entry_system_stats_efs_data_d"]
         gpu = by_id["beszel_entry_system_stats_g_0_u"]
@@ -197,14 +197,14 @@ class TestBeszelSensor:
             }
         }
         initial_ids = {
-            sensor.unique_id for sensor in _create_available_sensors(coordinator)
+            sensor.unique_id for sensor in _create_available_sensors(coordinator, set())
         }
         coordinator.data["system"]["stats"] = {
             "dio": [1, 2],
             "dios": [1, 2, 3, 4, 5, 6],
         }
         later_ids = {
-            sensor.unique_id for sensor in _create_available_sensors(coordinator)
+            sensor.unique_id for sensor in _create_available_sensors(coordinator, set())
         }
         assert "beszel_entry_system_stats_dr" not in initial_ids
         assert "beszel_entry_system_stats_dr" in later_ids
@@ -293,7 +293,7 @@ def test_missing_operating_system_is_none():
     coordinator.data = {"system": {"info": {"os": 0}}}
     sensor = next(
         sensor
-        for sensor in _create_available_sensors(coordinator)
+        for sensor in _create_available_sensors(coordinator, set())
         if sensor.unique_id.endswith("_info_os")
     )
     assert sensor.native_value == "Linux"
@@ -303,7 +303,7 @@ def test_missing_operating_system_is_none():
         assert "model" not in sensor.device_info
         assert not any(
             sensor.unique_id.endswith("_info_os")
-            for sensor in _create_available_sensors(coordinator)
+            for sensor in _create_available_sensors(coordinator, set())
         )
 
 
@@ -325,7 +325,7 @@ def test_temperature_names_follow_the_cpu_thermal_rule():
     }
     by_key = {
         sensor.unique_id.rsplit("_temperature_", 1)[1]: sensor
-        for sensor in _create_available_sensors(coordinator)
+        for sensor in _create_available_sensors(coordinator, set())
         if "_temperature_" in sensor.unique_id
     }
     assert by_key["cpu_thermal"].translation_key == "cpu_temperature"
