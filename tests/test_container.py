@@ -4,7 +4,9 @@ from datetime import timedelta
 from unittest.mock import MagicMock
 
 import pytest
+from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.const import DOMAIN
 from custom_components.beszel.sensor import _create_available_sensors
@@ -44,9 +46,15 @@ def coordinator():
     return coordinator
 
 
-def test_container_sensors_report_converted_values(coordinator):
+async def test_container_sensors_report_converted_values(hass, coordinator):
     """Container values use the integration's decimal units and health states."""
+    entry = MockConfigEntry(domain=DOMAIN, entry_id="entry")
+    entry.add_to_hass(hass)
+    system = dr.async_get(hass).async_get_or_create(
+        config_entry_id="entry", identifiers={(DOMAIN, "entry_system")}
+    )
     sensors = container_sensors(coordinator)
+    sensors["cpu"].hass = hass
     updated = sensors.pop("updated").native_value
     assert abs(dt_util.utcnow() - updated) < timedelta(seconds=5)
     assert {key: sensor.native_value for key, sensor in sensors.items()} == {
@@ -62,7 +70,7 @@ def test_container_sensors_report_converted_values(coordinator):
         "manufacturer": "Beszel",
         "model": "nginx:latest",
         "name": "web",
-        "via_device": (DOMAIN, "entry_system"),
+        "via_device_id": system.id,
     }
 
 
