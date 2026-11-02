@@ -14,6 +14,7 @@ from homeassistant.const import (
     UnitOfDataRate,
     UnitOfInformation,
 )
+from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -163,14 +164,19 @@ class BeszelContainerSensor(BeszelEntity, SensorEntity):
     def device_info(self):
         """Group the container's sensors in a device under its system."""
         entry_id = self.coordinator.config_entry.entry_id
-        return {
+        device_info = {
             "identifiers": {
                 container_identifier(entry_id, self._system_id, self._container_id)
             },
             "manufacturer": MANUFACTURER,
-            "via_device": device_identifier(entry_id, self._system_id),
             **container_details(self._container_id, self.container),
         }
+        system = dr.async_get(self.hass).async_get_device_by_identifier(
+            device_identifier(entry_id, self._system_id), entry_id
+        )
+        if system is not None:
+            device_info["via_device_id"] = system.id
+        return device_info
 
     @property
     def native_value(self):
