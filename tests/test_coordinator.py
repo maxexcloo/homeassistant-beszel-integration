@@ -25,6 +25,10 @@ class FakeApiClient:
         record = {"stats": {"cpu": 12.5}, "created": dt_util.utcnow().isoformat()}
         return {"healthy": record, "system": record}
 
+    async def async_get_containers(self):
+        """Return no containers by default."""
+        return []
+
     async def async_get_network_monitors(self):
         """Return no probes by default."""
         return []
@@ -265,3 +269,28 @@ class TestBeszelDataUpdateCoordinator:
         assert data["system"]["info"]["m"] == "ARM Cortex-A76"
         assert data["system"]["info"]["k"] == "6.1.0-rpi8"
         assert data["system"]["info"]["os"] == 0
+
+    async def test_containers_are_grouped_and_cached_on_failure(self, hass, caplog):
+        """Containers map to their systems and keep their cache during outages."""
+        api = FakeApiClient()
+        container = {"id": "c1", "system": "healthy", "cpu": 1.5}
+        api.async_get_containers = AsyncMock(
+            return_value=[container, {"id": "c2", "system": "removed"}]
+        )
+        coordinator = BeszelDataUpdateCoordinator(
+            hass, api_client=api, config_entry=MockConfigEntry(domain=DOMAIN)
+        )
+        data = await coordinator._async_update_data()
+        assert data["healthy"]["containers"] == {"c1": container}
+        assert data["failed"]["containers"] == {}
+
+        coordinator.data = data
+        api.async_get_containers.side_effect = RuntimeError("containers unavailable")
+        cached = await coordinator._async_update_data()
+        assert cached["healthy"]["containers"] == {"c1": container}
+        assert cached["healthy"]["stats"] == {"cpu": 12.5}
+        assert "containers unavailable" in caplog.text
+
+        api.async_get_containers.side_effect = BeszelApiAuthError("expired token")
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()

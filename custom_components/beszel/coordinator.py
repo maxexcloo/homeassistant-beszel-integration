@@ -79,7 +79,8 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("No systems found on Beszel Hub %s", self.api_client.host)
                 return {}
 
-            details, probes, records = await asyncio.gather(
+            containers, details, probes, records = await asyncio.gather(
+                self._fetch_containers(systems),
                 self._fetch_system_details(),
                 self._fetch_network_probes(systems),
                 self._fetch_system_stats(systems),
@@ -90,6 +91,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 system_id = system["id"]
                 record = records.get(system_id, {})
                 all_system_data[system_id] = {
+                    "containers": containers.get(system_id, {}),
                     "info": _merge_system_info(
                         system.get("info"), details.get(system_id, {})
                     ),
@@ -110,6 +112,28 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(
                 f"Error communicating with Beszel Hub {self.api_client.host}: {err}"
             ) from err
+
+    async def _fetch_containers(self, systems):
+        """Fetch container reports, reusing the cached reports on failure."""
+        try:
+            records = await self.api_client.async_get_containers()
+        except BeszelApiAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - containers are best-effort
+            _LOGGER.warning(
+                "Error fetching containers from Beszel Hub %s for systems %s: %s",
+                self.api_client.host,
+                _system_names(systems),
+                err,
+            )
+            return {
+                system_id: system.get("containers", {})
+                for system_id, system in (self.data or {}).items()
+            }
+        containers = {}
+        for record in records:
+            containers.setdefault(record["system"], {})[record["id"]] = record
+        return containers
 
     async def _fetch_network_probes(self, systems):
         """Fetch probes independently, preserving each failed sample's cache."""

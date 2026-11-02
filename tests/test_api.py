@@ -47,6 +47,28 @@ class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
             assert options["params"]["filter"] == 'type="1m" && created>=1792717140000'
             assert options["params"]["sort"] == "-created"
 
+    async def test_containers_keep_numeric_update_times(self):
+        """Container reports keep Unix millisecond times; old Hubs have none."""
+        pocketbase = MagicMock()
+        pocketbase.send.return_value = {
+            "page": 1,
+            "perPage": 500,
+            "totalItems": 1,
+            "totalPages": 1,
+            "items": [{"id": "c1", "system": "one", "updated": 1792717260000}],
+        }
+        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
+            client = BeszelApiClient("beszel.local", "user", "password")
+            client.async_authenticate = AsyncMock()
+            assert await client.async_get_containers() == [
+                {"id": "c1", "system": "one", "updated": 1792717260000}
+            ]
+            assert pocketbase.send.call_args.args[0] == (
+                "/api/collections/containers/records"
+            )
+            pocketbase.send.side_effect = ClientResponseError(status=404)
+            assert await client.async_get_containers() == []
+
     async def test_only_missing_monitor_collection_is_optional(self):
         """Old Hubs remain supported; auth and temporary failures remain errors."""
         for status in (404, 401, 403, 429, 500):

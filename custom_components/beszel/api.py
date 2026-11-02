@@ -35,11 +35,11 @@ class BeszelApiAuthError(Exception):
     """Custom exception for authentication errors."""
 
 
-class _NetworkMonitorStatsService(RecordService):
-    """Keep probe timestamps in Unix milliseconds when decoding records."""
+class _UnixTimestampService(RecordService):
+    """Keep Unix millisecond timestamps numeric when decoding records."""
 
     def decode(self, data):
-        """Avoid PocketBase's date-string decoder for numeric `created` fields."""
+        """Avoid PocketBase's date-string decoder for numeric timestamp fields."""
         return SimpleNamespace(**data)
 
 
@@ -140,6 +140,20 @@ class BeszelApiClient:
         )
         return [vars(record) for record in records]
 
+    async def async_get_containers(self):
+        """Fetch container records, treating Hubs without containers as having none."""
+        try:
+            records = await self._async_request(
+                lambda client: _UnixTimestampService(
+                    client, "containers"
+                ).get_full_list()
+            )
+        except ClientResponseError as err:
+            if err.status == 404:
+                return []
+            raise
+        return [vars(record) for record in records]
+
     async def async_get_network_monitors(self):
         """Fetch monitors, treating pre-0.20 Hubs as having no probes."""
         try:
@@ -155,7 +169,7 @@ class BeszelApiClient:
     async def async_get_latest_network_monitor_stats(self, since):
         """Fetch each monitor's latest one-minute sample created since a Unix ms time."""
         records = await self._async_request(
-            lambda client: _NetworkMonitorStatsService(
+            lambda client: _UnixTimestampService(
                 client, "network_monitor_stats"
             ).get_full_list(
                 query_params={

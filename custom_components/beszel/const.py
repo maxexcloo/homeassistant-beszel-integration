@@ -54,6 +54,15 @@ ATTR_SWAP_TOTAL_GB = "s"
 ATTR_SWAP_USED_GB = "su"
 ATTR_TEMPERATURES = "t"
 
+# Beszel containers collection fields
+ATTR_CONTAINER_CPU = "cpu"
+ATTR_CONTAINER_HEALTH = "health"
+ATTR_CONTAINER_IMAGE = "image"
+ATTR_CONTAINER_MEMORY = "memory"
+ATTR_CONTAINER_NAME = "name"
+ATTR_CONTAINER_NET = "net"
+ATTR_CONTAINER_UPDATED = "updated"
+
 # Beszel ExtraFsStats fields
 ATTR_FS_DISK_IO_STATS = "dios"
 ATTR_FS_DISK_PERCENT = "dp"

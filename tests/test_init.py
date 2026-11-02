@@ -31,6 +31,14 @@ async def test_integration_setup_update_and_unload(hass, freezer):
     with patch("custom_components.beszel.BeszelApiClient", autospec=True) as api_class:
         api = api_class.return_value
         api.host = "http://beszel.local"
+        api.async_get_containers.return_value = [
+            {
+                "id": "c1",
+                "system": "system",
+                "cpu": 1,
+                "updated": dt_util.utcnow().timestamp() * 1000,
+            }
+        ]
         api.async_get_network_monitors.return_value = []
         api.async_get_systems = AsyncMock(
             return_value=[
@@ -78,7 +86,8 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         assert state("stats_g_0_u").state == "25.0"
         assert state("info_os").state == "Linux"
         assert state("info_u").state == "90"
-        assert len(er.async_entries_for_config_entry(registry, entry.entry_id)) == 10
+        assert state("container_c1_cpu").state == "1.0"
+        assert len(er.async_entries_for_config_entry(registry, entry.entry_id)) == 12
         assert state("info_os").attributes.get("icon") == "mdi:linux"
         assert registry.async_get(state("info_os").entity_id).entity_category == (
             EntityCategory.DIAGNOSTIC
@@ -121,7 +130,12 @@ async def test_integration_setup_update_and_unload(hass, freezer):
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, f"{entry.entry_id}_removed")},
         )
+        container = device_registry.async_get_device_by_identifier(
+            (DOMAIN, f"{entry.entry_id}_system_container_c1"), entry.entry_id
+        )
+        assert container.via_device_id == reported.id
         assert not await async_remove_config_entry_device(hass, entry, reported)
+        assert not await async_remove_config_entry_device(hass, entry, container)
         assert await async_remove_config_entry_device(hass, entry, removed)
 
         api.async_get_latest_system_stats.side_effect = RuntimeError("stats failed")
@@ -173,6 +187,7 @@ async def test_probe_device_is_discovered_updated_and_removable(hass, freezer):
         ]
         api.async_get_system_details.return_value = {}
         api.async_get_latest_system_stats.return_value = {}
+        api.async_get_containers.return_value = []
         api.async_get_network_monitors.return_value = []
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()

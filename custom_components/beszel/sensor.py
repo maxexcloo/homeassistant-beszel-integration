@@ -71,9 +71,11 @@ from .const import (
     ATTR_UPTIME,
     STATS_MAX_AGE,
 )
+from .container import container_details, create_container_sensors
 from .entity import (
     BeszelEntity,
     as_number,
+    container_identifier,
     device_details,
     device_identifier,
     entity_unique_id,
@@ -688,6 +690,7 @@ def _create_available_sensors(coordinator, known_unique_ids):
             sensor = BeszelTemperatureSensor(coordinator, system_id, temperature_name)
             entities.append(sensor)
 
+    entities.extend(create_container_sensors(coordinator, known_unique_ids))
     entities.extend(create_network_probe_sensors(coordinator, known_unique_ids))
     return entities
 
@@ -698,21 +701,31 @@ async def async_setup_entry(hass, entry, async_add_entities):
     device_registry = dr.async_get(hass)
     known_unique_ids = set()
 
+    def update_device(identifier, details):
+        device = device_registry.async_get_device_by_identifier(
+            identifier, entry.entry_id
+        )
+        if device is None:
+            return
+        changes = {
+            key: value
+            for key, value in details.items()
+            if value is not None and getattr(device, key) != value
+        }
+        if changes:
+            device_registry.async_update_device(device.id, **changes)
+
     def update_registered_devices():
         for system_id, system_data in coordinator.data.items():
-            device = device_registry.async_get_device_by_identifier(
-                device_identifier(entry.entry_id, system_id), entry.entry_id
+            update_device(
+                device_identifier(entry.entry_id, system_id),
+                device_details(system_id, system_data),
             )
-            if device is None:
-                continue
-            details = device_details(system_id, system_data)
-            changes = {
-                key: value
-                for key, value in details.items()
-                if value is not None and getattr(device, key) != value
-            }
-            if changes:
-                device_registry.async_update_device(device.id, **changes)
+            for container_id, container in system_data.get("containers", {}).items():
+                update_device(
+                    container_identifier(entry.entry_id, system_id, container_id),
+                    container_details(container_id, container),
+                )
 
     @callback
     def async_discover_entities():

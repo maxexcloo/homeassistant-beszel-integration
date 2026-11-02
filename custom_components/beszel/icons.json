@@ -10,6 +10,21 @@
       "battery_state": {
         "default": "mdi:battery-charging"
       },
+      "container_cpu_usage": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "container_health": {
+        "default": "mdi:heart-pulse"
+      },
+      "container_last_report": {
+        "default": "mdi:clock-outline"
+      },
+      "container_memory_used": {
+        "default": "mdi:memory"
+      },
+      "container_network_speed": {
+        "default": "mdi:swap-vertical"
+      },
       "cpu_cores": {
         "default": "mdi:cpu-64-bit"
       },
