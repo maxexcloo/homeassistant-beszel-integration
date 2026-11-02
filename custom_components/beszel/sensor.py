@@ -69,6 +69,7 @@ from .const import (
     ATTR_TEMPERATURES,
     ATTR_THREADS,
     ATTR_UPTIME,
+    STATS_MAX_AGE,
 )
 from .entity import (
     BeszelEntity,
@@ -751,7 +752,7 @@ class BeszelCoordinatorSensor(BeszelEntity, SensorEntity):
             str(self.system_data.get("status")).lower() == "up"
             and timestamp is not None
             and timestamp.tzinfo is not None
-            and timedelta(0) <= dt_util.utcnow() - timestamp <= timedelta(minutes=5)
+            and timedelta(0) <= dt_util.utcnow() - timestamp <= STATS_MAX_AGE
         )
 
 

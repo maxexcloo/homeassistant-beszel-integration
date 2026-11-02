@@ -20,11 +20,10 @@ class FakeApiClient:
     async def async_authenticate(self):
         """Authenticate successfully."""
 
-    async def async_get_latest_system_stats(self, system_id):
-        """Return stats or fail for one system."""
-        if system_id == "failed":
-            raise RuntimeError("stats unavailable")
-        return {"stats": {"cpu": 12.5}, "created": dt_util.utcnow().isoformat()}
+    async def async_get_latest_system_stats(self, since):
+        """Return fresh stats for every system except the failed one."""
+        record = {"stats": {"cpu": 12.5}, "created": dt_util.utcnow().isoformat()}
+        return {"healthy": record, "system": record}
 
     async def async_get_network_monitors(self):
         """Return no probes by default."""
@@ -175,28 +174,30 @@ class TestBeszelDataUpdateCoordinator:
         assert data["system"]["stats"] == {"cpu": 12.5}
         assert "details unavailable" in caplog.text
 
-    async def test_results_remain_mapped_and_failures_use_cache(self, hass, caplog):
-        """Results stay mapped to their systems and failures retain cache."""
+    async def test_statistics_failure_uses_cache(self, hass, caplog):
+        """A failed statistics query keeps every system's cached record."""
+        api = FakeApiClient()
         coordinator = BeszelDataUpdateCoordinator(
             hass,
-            api_client=FakeApiClient(),
+            api_client=api,
             config_entry=MockConfigEntry(domain=DOMAIN),
         )
-        coordinator.data = {
-            "failed": {
-                "id": "failed",
-                "name": "Failed",
-                "status": "up",
-                "info": {},
-                "stats": {"cpu": 20},
-            }
-        }
-        with caplog.at_level("WARNING", logger="custom_components.beszel.coordinator"):
-            data = await coordinator._async_update_data()
+        data = await coordinator._async_update_data()
         assert data["healthy"]["stats"] == {"cpu": 12.5}
-        assert data["failed"]["stats"] == {"cpu": 20}
-        assert data["failed"]["status"] == "down"
-        assert all("http://beszel.local" in message for message in caplog.messages)
+        assert data["failed"]["stats"] is None
+        coordinator.data = data
+        api.async_get_latest_system_stats = AsyncMock(
+            side_effect=RuntimeError("stats unavailable")
+        )
+        with caplog.at_level("WARNING", logger="custom_components.beszel.coordinator"):
+            cached = await coordinator._async_update_data()
+        assert cached["healthy"]["stats"] == {"cpu": 12.5}
+        assert cached["healthy"]["stats_created"] == data["healthy"]["stats_created"]
+        assert cached["failed"]["status"] == "down"
+        assert any(
+            "http://beszel.local" in message and "Healthy (healthy)" in message
+            for message in caplog.messages
+        )
 
     async def test_statistics_authentication_failure_starts_reauthentication(
         self, hass
@@ -204,7 +205,7 @@ class TestBeszelDataUpdateCoordinator:
         """An authentication failure for one system is not treated as partial."""
 
         class AuthenticationFailureApi(FakeApiClient):
-            async def async_get_latest_system_stats(self, system_id):
+            async def async_get_latest_system_stats(self, since):
                 raise BeszelApiAuthError("expired token")
 
             async def async_get_systems(self):
@@ -222,8 +223,8 @@ class TestBeszelDataUpdateCoordinator:
         """A missing latest record remains distinct from empty statistics."""
 
         class MissingStatisticsApi(FakeApiClient):
-            async def async_get_latest_system_stats(self, system_id):
-                return None
+            async def async_get_latest_system_stats(self, since):
+                return {}
 
             async def async_get_systems(self):
                 return [{"id": "system", "name": "Server", "status": "up"}]

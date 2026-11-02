@@ -45,14 +45,16 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         api.async_get_system_details = AsyncMock(return_value={"system": {"os": 0}})
         api.async_get_latest_system_stats = AsyncMock(
             return_value={
-                "created": dt_util.utcnow().isoformat(),
-                "stats": {
-                    "bat": [80, 3],
-                    "cpu": 12.5,
-                    "efs": {"data": {"d": 100}},
-                    "g": {"0": {"n": "Graphics", "u": 25}},
-                    "t": {"cpu": 45, "cpu_thermal": 46},
-                },
+                "system": {
+                    "created": dt_util.utcnow().isoformat(),
+                    "stats": {
+                        "bat": [80, 3],
+                        "cpu": 12.5,
+                        "efs": {"data": {"d": 100}},
+                        "g": {"0": {"n": "Graphics", "u": 25}},
+                        "t": {"cpu": 45, "cpu_thermal": 46},
+                    },
+                }
             }
         )
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -98,8 +100,10 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         api.async_get_systems.return_value[0]["info"] = {}
         api.async_get_system_details.return_value = {}
         api.async_get_latest_system_stats.return_value = {
-            "stats": {"b": [None, 1572864], "t": {"cpu": 47}},
-            "created": dt_util.utcnow().isoformat(),
+            "system": {
+                "stats": {"b": [None, 1572864], "t": {"cpu": 47}},
+                "created": dt_util.utcnow().isoformat(),
+            }
         }
         await coordinator.async_refresh()
         await hass.async_block_till_done()
@@ -168,7 +172,7 @@ async def test_probe_device_is_discovered_updated_and_removable(hass, freezer):
             {"id": system, "name": system, "status": "up"} for system in ("one", "two")
         ]
         api.async_get_system_details.return_value = {}
-        api.async_get_latest_system_stats.return_value = None
+        api.async_get_latest_system_stats.return_value = {}
         api.async_get_network_monitors.return_value = []
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
