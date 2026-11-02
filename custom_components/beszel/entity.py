@@ -66,7 +66,12 @@ class BeszelEntity(CoordinatorEntity):
     @property
     def system_data(self):
         """Return current data for this entity's system."""
-        return mapping((self.coordinator.data or {}).get(self._system_id))
+        return self.coordinator.data.get(self._system_id, {})
+
+    @property
+    def is_up(self):
+        """Return whether Beszel reports this system as up."""
+        return str(self.system_data.get("status")).lower() == "up"
 
     @property
     def available(self):

@@ -86,16 +86,22 @@ def _probe_value(probe, key):
     return round(value / 1000, 3)
 
 
+def _probe_unique_id(coordinator, system_id, monitor_id, description):
+    return entity_unique_id(
+        coordinator.config_entry.entry_id,
+        system_id,
+        f"probe_{monitor_id}_{description.key}",
+    )
+
+
 def create_network_probe_sensors(coordinator, known_unique_ids):
     """Discover probe measurements as they appear on any system."""
     entities = []
-    for system_id, system in (coordinator.data or {}).items():
+    for system_id, system in coordinator.data.items():
         for monitor_id, probe in mapping(system.get("network_probes")).items():
             for description in PROBE_SENSOR_DESCRIPTIONS:
-                unique_id = entity_unique_id(
-                    coordinator.config_entry.entry_id,
-                    system_id,
-                    f"probe_{monitor_id}_{description.key}",
+                unique_id = _probe_unique_id(
+                    coordinator, system_id, monitor_id, description
                 )
                 if (
                     unique_id not in known_unique_ids
@@ -117,10 +123,8 @@ class BeszelNetworkProbeSensor(BeszelEntity, SensorEntity):
         super().__init__(coordinator, system_id)
         self.entity_description = description
         self._monitor_id = monitor_id
-        self._attr_unique_id = entity_unique_id(
-            coordinator.config_entry.entry_id,
-            system_id,
-            f"probe_{monitor_id}_{description.key}",
+        self._attr_unique_id = _probe_unique_id(
+            coordinator, system_id, monitor_id, description
         )
         probe = self.probe
         protocol = probe.get("protocol")
@@ -144,7 +148,7 @@ class BeszelNetworkProbeSensor(BeszelEntity, SensorEntity):
     @property
     def available(self):
         """Require an enabled probe on an online host with a fresh sample."""
-        if not super().available or self.system_data.get("status") != "up":
+        if not super().available or not self.is_up:
             return False
         probe = self.probe
         if probe.get("enabled") is not True:
