@@ -842,7 +842,6 @@ class BeszelTemperatureSensor(BeszelCoordinatorSensor):
             BeszelSensorDescription(
                 key=temperature_key,
                 translation_key=translation_key,
-                data_source="stats",
                 device_class=SensorDeviceClass.TEMPERATURE,
                 native_unit_of_measurement=UnitOfTemperature.CELSIUS,
                 state_class=SensorStateClass.MEASUREMENT,
