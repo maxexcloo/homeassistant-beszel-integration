@@ -1,273 +1,209 @@
 """Tests for the Beszel API client."""
 
-import unittest
 from datetime import UTC, datetime
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from http import HTTPStatus
 
-from pocketbase.utils import ClientResponseError
+import pytest
+from aiohttp import ClientResponseError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.test_util.aiohttp import (
+    AiohttpClientMockResponse,
+)
 
-from custom_components.beszel.api import BeszelApiAuthError, BeszelApiClient
+from custom_components.beszel.api import PAGE_SIZE, BeszelApiAuthError, BeszelApiClient
+
+HOST = "http://beszel.local"
+SUPERUSERS = f"{HOST}/api/collections/_superusers/auth-with-password"
+USERS = f"{HOST}/api/collections/users/auth-with-password"
 
 
-class BeszelApiClientTests(unittest.IsolatedAsyncioTestCase):
-    """Exercise Beszel API authentication behaviour."""
+def records_url(collection):
+    """Return the records endpoint of a collection."""
+    return f"{HOST}/api/collections/{collection}/records"
 
-    async def test_network_monitors_and_latest_stats_query(self):
-        """Query the newest probe record without losing its numeric timestamp."""
-        monitors = MagicMock()
-        monitors.get_full_list.return_value = [
-            SimpleNamespace(id="probe", system="one")
-        ]
-        newest = {"created": 1792717260000, "monitor": "probe", "total_count": 2}
-        older = {"created": 1792717200000, "monitor": "probe", "total_count": 1}
-        other = {"created": 1792717200000, "monitor": "other", "total_count": 3}
-        pocketbase = MagicMock()
-        pocketbase.send.return_value = {
-            "page": 1,
-            "perPage": 500,
-            "totalItems": 3,
-            "totalPages": 1,
-            "items": [newest, older, other],
-        }
-        pocketbase.collection.side_effect = {
-            "network_monitors": monitors,
-        }.__getitem__
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            client.async_authenticate = AsyncMock()
-            assert await client.async_get_network_monitors() == [
-                {"id": "probe", "system": "one"}
+
+def queries(aioclient_mock, collection):
+    """Return the query of each request made to a collection."""
+    return [
+        dict(url.query)
+        for method, url, *_ in aioclient_mock.mock_calls
+        if method.lower() == "get" and url.path.endswith(f"/{collection}/records")
+    ]
+
+
+@pytest.fixture
+async def client(hass, aioclient_mock):
+    """Return a client for the mocked Hub."""
+    return BeszelApiClient(async_get_clientsession(hass), HOST, "user", "password")
+
+
+async def test_authentication_prefers_superusers(hass, aioclient_mock):
+    """Authentication normalises the host and stops after superusers succeed."""
+    aioclient_mock.post(SUPERUSERS, json={"token": "token"})
+    client = BeszelApiClient(async_get_clientsession(hass), "beszel.local/", "u", "p")
+    await client.async_authenticate()
+    assert client.host == HOST
+    assert [str(call[1]) for call in aioclient_mock.mock_calls] == [SUPERUSERS]
+
+
+async def test_authentication_falls_back_to_users(client, aioclient_mock):
+    """Authentication supports current and legacy PocketBase collections."""
+    aioclient_mock.post(SUPERUSERS, status=HTTPStatus.NOT_FOUND)
+    aioclient_mock.post(USERS, json={"token": "token"})
+    await client.async_authenticate()
+    assert aioclient_mock.call_count == 2
+
+
+async def test_invalid_credentials_raise_authentication_failure(client, aioclient_mock):
+    """Rejected credentials trigger Home Assistant reauthentication."""
+    aioclient_mock.post(SUPERUSERS, status=HTTPStatus.BAD_REQUEST)
+    aioclient_mock.post(USERS, status=HTTPStatus.BAD_REQUEST)
+    with pytest.raises(BeszelApiAuthError):
+        await client.async_authenticate()
+
+
+@pytest.mark.parametrize("status", [408, 429, 500, 503])
+async def test_authentication_failures_are_not_invalid_credentials(
+    client, aioclient_mock, status
+):
+    """Connection failures and rate limits remain retryable errors."""
+    aioclient_mock.post(SUPERUSERS, status=status)
+    with pytest.raises(ClientResponseError):
+        await client.async_authenticate()
+    assert aioclient_mock.call_count == 1
+
+
+async def test_latest_statistics_query_recent_one_minute_records(
+    client, aioclient_mock
+):
+    """Fetch recent one-minute records once and keep each system's newest."""
+    aioclient_mock.post(SUPERUSERS, json={"token": "token"})
+    newest = {
+        "system": "one",
+        "stats": {"cpu": 2},
+        "created": "2026-10-22 01:01:00.123Z",
+    }
+    older = {
+        "system": "one",
+        "stats": {"cpu": 1},
+        "created": "2026-10-22 01:00:00.000Z",
+    }
+    other = {
+        "system": "two",
+        "stats": {"cpu": 3},
+        "created": "2026-10-22 01:00:00.000Z",
+    }
+    aioclient_mock.get(
+        records_url("system_stats"), json={"items": [newest, older, other]}
+    )
+
+    result = await client.async_get_latest_system_stats(
+        datetime(2026, 10, 22, 0, 56, tzinfo=UTC)
+    )
+
+    assert result == {"one": newest, "two": other}
+    assert dt_util.parse_datetime(newest["created"]) == datetime(
+        2026, 10, 22, 1, 1, 0, 123000, tzinfo=UTC
+    )
+    [query] = queries(aioclient_mock, "system_stats")
+    assert query["filter"] == 'type="1m" && created>="2026-10-22 00:56:00.000Z"'
+    assert query["sort"] == "-created"
+
+
+async def test_network_monitors_and_latest_stats_query(client, aioclient_mock):
+    """Query the newest probe record without losing its numeric timestamp."""
+    aioclient_mock.post(SUPERUSERS, json={"token": "token"})
+    newest = {"created": 1792717260000, "monitor": "probe", "total_count": 2}
+    older = {"created": 1792717200000, "monitor": "probe", "total_count": 1}
+    other = {"created": 1792717200000, "monitor": "other", "total_count": 3}
+    aioclient_mock.get(
+        records_url("network_monitors"), json={"items": [{"id": "probe"}]}
+    )
+    aioclient_mock.get(
+        records_url("network_monitor_stats"), json={"items": [newest, older, other]}
+    )
+
+    assert await client.async_get_network_monitors() == [{"id": "probe"}]
+    assert await client.async_get_latest_network_monitor_stats(1792717140000.5) == {
+        "other": other,
+        "probe": newest,
+    }
+    [query] = queries(aioclient_mock, "network_monitor_stats")
+    assert query["filter"] == 'type="1m" && created>=1792717140000'
+
+
+@pytest.mark.parametrize("status", [404, 500])
+async def test_only_missing_optional_collections_are_empty(
+    client, aioclient_mock, status
+):
+    """Old Hubs without containers or monitors work; other failures are errors."""
+    aioclient_mock.post(SUPERUSERS, json={"token": "token"})
+    aioclient_mock.get(records_url("containers"), status=status)
+    aioclient_mock.get(records_url("network_monitors"), status=status)
+    if status == 404:
+        assert await client.async_get_containers() == []
+        assert await client.async_get_network_monitors() == []
+    else:
+        with pytest.raises(ClientResponseError):
+            await client.async_get_containers()
+
+
+async def test_requests_reuse_authentication_and_page(client, aioclient_mock):
+    """Requests log in once and fetch every page of a collection."""
+    aioclient_mock.post(SUPERUSERS, json={"token": "token"})
+    first = [{"id": str(index)} for index in range(PAGE_SIZE)]
+    aioclient_mock.get(
+        records_url("systems"), params={"page": 1}, json={"items": first}
+    )
+    aioclient_mock.get(
+        records_url("systems"), params={"page": 2}, json={"items": [{"id": "last"}]}
+    )
+
+    assert len(await client.async_get_systems()) == PAGE_SIZE + 1
+    assert len(await client.async_get_systems()) == PAGE_SIZE + 1
+    assert sum(call[0].lower() == "post" for call in aioclient_mock.mock_calls) == 1
+    assert aioclient_mock.mock_calls[1][3] == {"Authorization": "token"}
+
+
+async def test_expired_token_logs_in_again(client, aioclient_mock):
+    """A rejected session is renewed once before credentials count as invalid."""
+    responses = iter([HTTPStatus.UNAUTHORIZED, HTTPStatus.OK])
+
+    async def expire_once(method, url, data):
+        return AiohttpClientMockResponse(
+            method, url, status=next(responses), json={"items": []}
+        )
+
+    aioclient_mock.post(SUPERUSERS, json={"token": "token"})
+    aioclient_mock.get(records_url("systems"), side_effect=expire_once)
+    assert await client.async_get_systems() == []
+    assert sum(call[0].lower() == "post" for call in aioclient_mock.mock_calls) == 2
+
+
+async def test_rejected_fresh_token_raises_authentication_failure(
+    client, aioclient_mock
+):
+    """A fresh session that is still rejected requires reauthentication."""
+    aioclient_mock.post(SUPERUSERS, json={"token": "token"})
+    aioclient_mock.get(records_url("system_stats"), status=HTTPStatus.FORBIDDEN)
+    with pytest.raises(BeszelApiAuthError):
+        await client.async_get_latest_system_stats(datetime.now(UTC))
+
+
+async def test_system_details_are_keyed_by_system(client, aioclient_mock):
+    """System details are returned keyed by their system identifier."""
+    aioclient_mock.post(SUPERUSERS, json={"token": "token"})
+    aioclient_mock.get(
+        records_url("system_details"),
+        json={
+            "items": [
+                {"system": "one", "kernel": "6.1"},
+                {"system": "two", "kernel": "5.15"},
+                {"name": "orphan"},
             ]
-            assert await client.async_get_latest_network_monitor_stats(
-                1792717140000.5
-            ) == {"other": other, "probe": newest}
-            path, options = pocketbase.send.call_args.args
-            assert path == "/api/collections/network_monitor_stats/records"
-            assert options["params"]["filter"] == 'type="1m" && created>=1792717140000'
-            assert options["params"]["sort"] == "-created"
-
-    async def test_containers_keep_numeric_update_times(self):
-        """Container reports keep Unix millisecond times; old Hubs have none."""
-        pocketbase = MagicMock()
-        pocketbase.send.return_value = {
-            "page": 1,
-            "perPage": 500,
-            "totalItems": 1,
-            "totalPages": 1,
-            "items": [{"id": "c1", "system": "one", "updated": 1792717260000}],
-        }
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            client.async_authenticate = AsyncMock()
-            assert await client.async_get_containers() == [
-                {"id": "c1", "system": "one", "updated": 1792717260000}
-            ]
-            assert pocketbase.send.call_args.args[0] == (
-                "/api/collections/containers/records"
-            )
-            pocketbase.send.side_effect = ClientResponseError(status=404)
-            assert await client.async_get_containers() == []
-
-    async def test_only_missing_monitor_collection_is_optional(self):
-        """Old Hubs remain supported; auth and temporary failures remain errors."""
-        for status in (404, 401, 403, 429, 500):
-            with self.subTest(status=status):
-                pocketbase = MagicMock()
-                pocketbase.collection.return_value.get_full_list.side_effect = (
-                    ClientResponseError(status=status)
-                )
-                with patch(
-                    "custom_components.beszel.api.PocketBase", return_value=pocketbase
-                ):
-                    client = BeszelApiClient("beszel.local", "user", "password")
-                    client.async_authenticate = AsyncMock()
-                    if status == 404:
-                        assert await client.async_get_network_monitors() == []
-                    else:
-                        error = (
-                            BeszelApiAuthError
-                            if status in (401, 403)
-                            else ClientResponseError
-                        )
-                        with self.assertRaises(error):
-                            await client.async_get_network_monitors()
-
-    async def test_probe_statistics_auth_failure_clears_session(self):
-        """Probe statistics authentication errors must trigger reauthentication."""
-        pocketbase = MagicMock()
-        pocketbase.send.side_effect = ClientResponseError(status=401)
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            client.async_authenticate = AsyncMock()
-            with self.assertRaises(BeszelApiAuthError):
-                await client.async_get_latest_network_monitor_stats(0)
-        pocketbase.auth_store.clear.assert_called_once_with()
-
-    async def test_authentication_connection_failures_are_not_invalid_credentials(self):
-        """Connection failures and rate limits must remain retryable errors."""
-        for status in (0, 408, 429, 500, 503):
-            with self.subTest(status=status):
-                pocketbase = MagicMock()
-                error = ClientResponseError(status=status)
-                pocketbase.collection.return_value.auth_with_password.side_effect = (
-                    error
-                )
-                with patch(
-                    "custom_components.beszel.api.PocketBase", return_value=pocketbase
-                ):
-                    client = BeszelApiClient("beszel.local", "user", "password")
-                    with self.assertRaises(ClientResponseError) as raised:
-                        await client.async_authenticate()
-
-                self.assertIs(raised.exception, error)
-                pocketbase.collection.assert_called_once_with("_superusers")
-
-    async def test_invalid_credentials_raise_authentication_failure(self):
-        """Rejected credentials still trigger Home Assistant reauthentication."""
-        pocketbase = MagicMock()
-        pocketbase.collection.return_value.auth_with_password.side_effect = (
-            ClientResponseError(status=400)
-        )
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "wrong")
-            with self.assertRaises(BeszelApiAuthError):
-                await client.async_authenticate()
-
-        self.assertEqual(pocketbase.collection.call_count, 2)
-
-    async def test_authentication_falls_back_to_users(self):
-        """Authentication supports current and legacy PocketBase collections."""
-        superusers = MagicMock()
-        superusers.auth_with_password.side_effect = ClientResponseError(status=404)
-        users = MagicMock()
-
-        pocketbase = MagicMock()
-        pocketbase.collection.side_effect = {
-            "_superusers": superusers,
-            "users": users,
-        }.get
-
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local/", "user", "password")
-            await client.async_authenticate()
-
-        self.assertEqual(client.host, "http://beszel.local")
-        superusers.auth_with_password.assert_called_once_with("user", "password")
-        users.auth_with_password.assert_called_once_with("user", "password")
-
-    async def test_authentication_prefers_superusers(self):
-        """Authentication stops after the current collection succeeds."""
-        superusers = MagicMock()
-        users = MagicMock()
-
-        pocketbase = MagicMock()
-        pocketbase.collection.side_effect = {
-            "_superusers": superusers,
-            "users": users,
-        }.get
-
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("https://beszel.local", "user", "password")
-            await client.async_authenticate()
-
-        superusers.auth_with_password.assert_called_once_with("user", "password")
-        users.auth_with_password.assert_not_called()
-
-    async def test_latest_statistics_query_recent_one_minute_records(self):
-        """Fetch recent one-minute records once and keep each system's newest."""
-        collection = MagicMock()
-        # PocketBase returns record timestamps as naive UTC datetimes.
-        collection.get_full_list.return_value = [
-            SimpleNamespace(
-                system="one", stats={"cpu": 2}, created=datetime(2026, 10, 22, 1, 1)
-            ),
-            SimpleNamespace(
-                system="one", stats={"cpu": 1}, created=datetime(2026, 10, 22, 1)
-            ),
-            SimpleNamespace(
-                system="two", stats={"cpu": 3}, created=datetime(2026, 10, 22, 1)
-            ),
-        ]
-        pocketbase = MagicMock()
-        pocketbase.collection.return_value = collection
-
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            client.async_authenticate = AsyncMock()
-            result = await client.async_get_latest_system_stats(
-                datetime(2026, 10, 22, 0, 56, tzinfo=UTC)
-            )
-
-        self.assertEqual(
-            {system: record["stats"] for system, record in result.items()},
-            {"one": {"cpu": 2}, "two": {"cpu": 3}},
-        )
-        self.assertEqual(result["one"]["created"], "2026-10-22T01:01:00+00:00")
-        pocketbase.collection.assert_called_once_with("system_stats")
-        collection.get_full_list.assert_called_once_with(
-            query_params={
-                "filter": 'type="1m" && created>="2026-10-22 00:56:00.000Z"',
-                "sort": "-created",
-            },
-        )
-
-    async def test_statistics_authentication_failure_is_raised(self):
-        """An expired statistics token is exposed as an authentication error."""
-        collection = MagicMock()
-        collection.get_full_list.side_effect = ClientResponseError(status=401)
-        pocketbase = MagicMock()
-        pocketbase.collection.return_value = collection
-
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            client.async_authenticate = AsyncMock()
-            with self.assertRaises(BeszelApiAuthError):
-                await client.async_get_latest_system_stats(datetime.now(UTC))
-
-        pocketbase.auth_store.clear.assert_called_once_with()
-
-    async def test_system_details_are_keyed_by_system(self):
-        """System details are returned keyed by their system identifier."""
-        records = [
-            SimpleNamespace(system="one", kernel="6.1"),
-            SimpleNamespace(system="two", kernel="5.15"),
-            SimpleNamespace(name="orphan"),
-        ]
-        collection = MagicMock()
-        collection.get_full_list.return_value = records
-        pocketbase = MagicMock()
-        pocketbase.collection.return_value = collection
-
-        with patch("custom_components.beszel.api.PocketBase", return_value=pocketbase):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            client.async_authenticate = AsyncMock()
-            result = await client.async_get_system_details()
-
-        self.assertEqual(set(result), {"one", "two"})
-        self.assertEqual(result["one"]["kernel"], "6.1")
-
-    async def test_statistics_requests_reuse_valid_authentication(self):
-        """Request methods authenticate once and reuse a still-valid session."""
-        pocketbase = MagicMock()
-        pocketbase.auth_store.token = ""
-        authentication = MagicMock()
-        authentication.auth_with_password.side_effect = lambda *_: setattr(
-            pocketbase.auth_store, "token", "token"
-        )
-        statistics = MagicMock()
-        statistics.get_full_list.return_value = []
-        pocketbase.collection.side_effect = {
-            "_superusers": authentication,
-            "system_stats": statistics,
-        }.__getitem__
-        with (
-            patch("custom_components.beszel.api.PocketBase", return_value=pocketbase),
-            patch("custom_components.beszel.api.validate_token", return_value=True),
-        ):
-            client = BeszelApiClient("beszel.local", "user", "password")
-            assert await client.async_get_latest_system_stats(datetime.now(UTC)) == {}
-            assert await client.async_get_latest_system_stats(datetime.now(UTC)) == {}
-
-        authentication.auth_with_password.assert_called_once_with("user", "password")
-        assert statistics.get_full_list.call_count == 2
+        },
+    )
+    result = await client.async_get_system_details()
+    assert set(result) == {"one", "two"}
+    assert result["one"]["kernel"] == "6.1"

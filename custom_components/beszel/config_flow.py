@@ -3,15 +3,16 @@
 import logging
 
 import voluptuous as vol
+from aiohttp import ClientError
 from homeassistant.config_entries import ConfigFlow, OptionsFlowWithReload
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
 )
-from pocketbase.utils import ClientResponseError
 
 from .api import BeszelApiAuthError, BeszelApiClient, normalise_host, unique_id
 from .const import CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN
@@ -43,16 +44,19 @@ OPTIONS_SCHEMA = vol.Schema(
 )
 
 
-async def _async_validate_input(data):
+async def _async_validate_input(hass, data):
     """Return form errors for Beszel connection details."""
     api_client = BeszelApiClient(
-        data[CONF_HOST], data[CONF_USERNAME], data[CONF_PASSWORD]
+        async_get_clientsession(hass),
+        data[CONF_HOST],
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
     )
     try:
         await api_client.async_authenticate()
     except BeszelApiAuthError:
         return {"base": "invalid_auth"}
-    except ClientResponseError:
+    except ClientError, TimeoutError:
         return {"base": "cannot_connect"}
     except Exception:
         _LOGGER.exception(
@@ -84,7 +88,7 @@ class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             data = {**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
-            errors = await _async_validate_input(data)
+            errors = await _async_validate_input(self.hass, data)
             if not errors:
                 return self.async_update_reload_and_abort(entry, data=data)
 
@@ -101,7 +105,7 @@ class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            errors = await _async_validate_input(user_input)
+            errors = await _async_validate_input(self.hass, user_input)
             if not errors:
                 entry_unique_id = unique_id(
                     user_input[CONF_HOST], user_input[CONF_USERNAME]
@@ -135,7 +139,7 @@ class BeszelConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors = {}
         if user_input is not None:
-            errors = await _async_validate_input(user_input)
+            errors = await _async_validate_input(self.hass, user_input)
             if not errors:
                 await self.async_set_unique_id(
                     unique_id(user_input[CONF_HOST], user_input[CONF_USERNAME])
