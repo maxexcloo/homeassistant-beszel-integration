@@ -11,7 +11,7 @@ Requires Home Assistant 2026.10.4 or newer and Beszel 0.18.0 or newer.
 ## Features
 
 - Battery level and charging state.
-- Configurable update interval.
+- Configurable update interval, and options to turn off containers and network probes.
 - Container CPU, memory, network and health sensors in a device per container.
 - CPU model, topology, and utilisation.
 - Diagnostics download with credentials redacted.
@@ -80,6 +80,10 @@ the device page when you need them.
 Statistics are fetched every minute by default. To store fewer states in the
 recorder, open **Settings → Devices & Services → Beszel → Configure** and set a
 longer **Update Interval**, up to 60 minutes.
+
+Turn off **Containers** or **Network Probes** in the same dialog to monitor only
+systems. Turning an option off stops fetching that data and removes its existing
+devices and entities.
 
 Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
 credentials. Home Assistant also prompts for a new password when authentication

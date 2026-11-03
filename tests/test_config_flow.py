@@ -8,10 +8,16 @@ from aiohttp import ClientConnectionError
 from homeassistant.config_entries import SOURCE_REAUTH, SOURCE_USER
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.api import BeszelApiAuthError
-from custom_components.beszel.const import CONF_UPDATE_INTERVAL, DOMAIN
+from custom_components.beszel.const import (
+    CONF_CONTAINERS,
+    CONF_NETWORK_PROBES,
+    CONF_UPDATE_INTERVAL,
+    DOMAIN,
+)
 
 
 async def test_user_flow_normalises_host(hass):
@@ -216,8 +222,8 @@ async def test_reconfigure_rejects_another_configured_account(hass):
     assert entry.unique_id == "http://old.local_user"
 
 
-async def test_options_flow_sets_update_interval(hass):
-    """The update interval option reloads the entry with the new polling rate."""
+async def test_options_flow_sets_update_interval_and_removes_disabled_devices(hass):
+    """Options reload the entry with the new polling rate and no disabled devices."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -228,6 +234,19 @@ async def test_options_flow_sets_update_interval(hass):
         version=3,
     )
     entry.add_to_hass(hass)
+    device_registry = dr.async_get(hass)
+    container = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_system_container_c1")},
+    )
+    probes = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_network_probes")},
+    )
+    system = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_system")},
+    )
     with patch("custom_components.beszel.BeszelApiClient", autospec=True) as api_class:
         api_class.return_value.async_get_systems = AsyncMock(return_value=[])
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -236,10 +255,22 @@ async def test_options_flow_sets_update_interval(hass):
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {CONF_UPDATE_INTERVAL: 5}
+            result["flow_id"],
+            {
+                CONF_CONTAINERS: False,
+                CONF_NETWORK_PROBES: False,
+                CONF_UPDATE_INTERVAL: 5,
+            },
         )
         await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {CONF_UPDATE_INTERVAL: 5}
+    assert entry.options == {
+        CONF_CONTAINERS: False,
+        CONF_NETWORK_PROBES: False,
+        CONF_UPDATE_INTERVAL: 5,
+    }
     assert entry.runtime_data.update_interval == timedelta(minutes=5)
+    assert device_registry.async_get(container.id) is None
+    assert device_registry.async_get(probes.id) is None
+    assert device_registry.async_get(system.id) is not None
