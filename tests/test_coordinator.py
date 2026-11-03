@@ -8,7 +8,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.api import BeszelApiAuthError
-from custom_components.beszel.const import DOMAIN
+from custom_components.beszel.const import CONF_CONTAINERS, CONF_NETWORK_PROBES, DOMAIN
 from custom_components.beszel.coordinator import BeszelDataUpdateCoordinator
 
 
@@ -274,6 +274,7 @@ class TestBeszelDataUpdateCoordinator:
         """Containers map to their systems and keep their cache during outages."""
         api = FakeApiClient()
         container = {"id": "c1", "system": "healthy", "cpu": 1.5}
+        api.async_get_network_monitors = AsyncMock(return_value=[])
         api.async_get_containers = AsyncMock(
             return_value=[container, {"id": "c2", "system": "removed"}]
         )
@@ -294,3 +295,24 @@ class TestBeszelDataUpdateCoordinator:
         api.async_get_containers.side_effect = BeszelApiAuthError("expired token")
         with pytest.raises(ConfigEntryAuthFailed):
             await coordinator._async_update_data()
+
+    async def test_disabled_containers_and_probes_are_not_fetched(self, hass):
+        """Disabled options skip their collections entirely."""
+        api = FakeApiClient()
+        api.async_get_network_monitors = AsyncMock(return_value=[])
+        api.async_get_containers = AsyncMock(
+            return_value=[{"id": "c1", "system": "healthy"}]
+        )
+        coordinator = BeszelDataUpdateCoordinator(
+            hass,
+            api_client=api,
+            config_entry=MockConfigEntry(
+                domain=DOMAIN,
+                options={CONF_CONTAINERS: False, CONF_NETWORK_PROBES: False},
+            ),
+        )
+        data = await coordinator._async_update_data()
+        assert data["healthy"]["containers"] == {}
+        assert data["healthy"]["network_probes"] == {}
+        api.async_get_containers.assert_not_called()
+        api.async_get_network_monitors.assert_not_called()

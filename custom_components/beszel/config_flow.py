@@ -9,13 +9,20 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
 )
 
 from .api import BeszelApiAuthError, BeszelApiClient, normalise_host, unique_id
-from .const import CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN
+from .const import (
+    CONF_CONTAINERS,
+    CONF_NETWORK_PROBES,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +36,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 OPTIONS_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_CONTAINERS, default=True): BooleanSelector(),
+        vol.Required(CONF_NETWORK_PROBES, default=True): BooleanSelector(),
         vol.Required(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): vol.All(
             NumberSelector(
                 NumberSelectorConfig(
@@ -159,7 +168,7 @@ class BeszelOptionsFlow(OptionsFlowWithReload):
     """Handle Beszel options."""
 
     async def async_step_init(self, user_input=None):
-        """Manage the update interval."""
+        """Manage the update interval and optional devices."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 

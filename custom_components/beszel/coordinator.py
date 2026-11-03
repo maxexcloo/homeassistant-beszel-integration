@@ -14,6 +14,8 @@ from .const import (
     ATTR_CPU_MODEL,
     ATTR_KERNEL_VERSION,
     ATTR_OS,
+    CONF_CONTAINERS,
+    CONF_NETWORK_PROBES,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -115,6 +117,8 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _fetch_containers(self, systems):
         """Fetch container reports, reusing the cached reports on failure."""
+        if not self.config_entry.options.get(CONF_CONTAINERS, True):
+            return {}
         try:
             records = await self.api_client.async_get_containers()
         except BeszelApiAuthError:
@@ -137,6 +141,8 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _fetch_network_probes(self, systems):
         """Fetch probes independently, preserving each failed sample's cache."""
+        if not self.config_entry.options.get(CONF_NETWORK_PROBES, True):
+            return {}
         cached = {
             system["id"]: (self.data or {})
             .get(system["id"], {})

@@ -4,6 +4,8 @@ from datetime import timedelta
 
 from homeassistant.const import Platform
 
+CONF_CONTAINERS = "containers"
+CONF_NETWORK_PROBES = "network_probes"
 CONF_UPDATE_INTERVAL = "update_interval"
 DEFAULT_UPDATE_INTERVAL = 1
 DOMAIN = "beszel"

@@ -48,9 +48,13 @@
     "step": {
       "init": {
         "data": {
+          "containers": "Containers",
+          "network_probes": "Network Probes",
           "update_interval": "Update Interval"
         },
         "data_description": {
+          "containers": "Create a device for each container Beszel reports. Turning this off removes existing container devices.",
+          "network_probes": "Create the Network Probes device when Beszel reports network monitors. Turning this off removes the existing device.",
           "update_interval": "How often to fetch statistics from the Beszel Hub. Longer intervals store fewer states in the recorder."
         }
       }
