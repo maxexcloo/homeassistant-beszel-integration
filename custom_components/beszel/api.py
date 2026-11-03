@@ -1,12 +1,9 @@
 """API for Beszel."""
 
-import asyncio
-from datetime import UTC, datetime
-from types import SimpleNamespace
+from aiohttp import ClientResponseError, ClientTimeout
 
-from pocketbase import PocketBase
-from pocketbase.services.record_service import RecordService
-from pocketbase.utils import ClientResponseError, validate_token
+PAGE_SIZE = 500
+TIMEOUT = ClientTimeout(total=30)
 
 
 def normalise_host(host):
@@ -14,16 +11,6 @@ def normalise_host(host):
     if not host.startswith(("http://", "https://")):
         host = f"http://{host}"
     return host.rstrip("/")
-
-
-def _record_fields(record):
-    """Return a record's fields with its creation time as an aware UTC timestamp."""
-    fields = dict(vars(record))
-    created = fields.get("created")
-    # PocketBase parses record timestamps into naive UTC datetimes.
-    if isinstance(created, datetime):
-        fields["created"] = created.replace(tzinfo=UTC).isoformat()
-    return fields
 
 
 def unique_id(host, username):
@@ -35,23 +22,15 @@ class BeszelApiAuthError(Exception):
     """Custom exception for authentication errors."""
 
 
-class _UnixTimestampService(RecordService):
-    """Keep Unix millisecond timestamps numeric when decoding records."""
-
-    def decode(self, data):
-        """Avoid PocketBase's date-string decoder for numeric timestamp fields."""
-        return SimpleNamespace(**data)
-
-
 class BeszelApiClient:
     """Beszel API Client."""
 
-    def __init__(self, host, username, password):
+    def __init__(self, session, host, username, password):
         """Initialise the API client."""
-        host = normalise_host(host)
-        self._client = None
-        self._host = host
+        self._host = normalise_host(host)
         self._password = password
+        self._session = session
+        self._token = None
         self._username = username
 
     @property
@@ -59,28 +38,18 @@ class BeszelApiClient:
         """Return the normalised Beszel Hub URL."""
         return self._host
 
-    async def _async_client(self):
-        """Return the PocketBase client, creating it outside the event loop."""
-        # Creating the client loads the CA bundle, which blocks.
-        if self._client is None:
-            self._client = await asyncio.to_thread(PocketBase, self._host)
-        return self._client
-
     async def async_authenticate(self):
         """Authenticate with the Beszel Hub."""
-        client = await self._async_client()
-        token = client.auth_store.token
-        if token and validate_token(token):
-            return
-
         last_error = None
         for collection in ("_superusers", "users"):
             try:
-                await asyncio.to_thread(
-                    client.collection(collection).auth_with_password,
-                    self._username,
-                    self._password,
-                )
+                async with self._session.post(
+                    f"{self._host}/api/collections/{collection}/auth-with-password",
+                    json={"identity": self._username, "password": self._password},
+                    timeout=TIMEOUT,
+                ) as response:
+                    response.raise_for_status()
+                    self._token = (await response.json())["token"]
                 return
             except ClientResponseError as err:
                 if err.status not in (400, 401, 403, 404):
@@ -89,96 +58,97 @@ class BeszelApiClient:
 
         raise BeszelApiAuthError("Authentication failed") from last_error
 
-    async def _async_request(self, request):
-        """Run a blocking request with the authenticated client in a thread."""
-        await self.async_authenticate()
-        client = await self._async_client()
+    async def _async_list(self, collection, params=None):
+        """Fetch every record of a collection, logging in again once if rejected."""
+        if self._token is None:
+            await self.async_authenticate()
         try:
-            return await asyncio.to_thread(request, client)
+            return await self._async_list_pages(collection, params)
+        except ClientResponseError as err:
+            if err.status not in (401, 403):
+                raise
+        # Tokens expire, so only a rejected fresh token means invalid credentials.
+        await self.async_authenticate()
+        try:
+            return await self._async_list_pages(collection, params)
         except ClientResponseError as err:
             if err.status in (401, 403):
-                client.auth_store.clear()
-                raise BeszelApiAuthError(
-                    "Token likely expired, re-authentication needed"
-                ) from err
+                self._token = None
+                raise BeszelApiAuthError("Beszel Hub rejected the session") from err
+            raise
+
+    async def _async_list_pages(self, collection, params):
+        records = []
+        page = 1
+        while True:
+            async with self._session.get(
+                f"{self._host}/api/collections/{collection}/records",
+                headers={"Authorization": self._token},
+                params={
+                    **(params or {}),
+                    "page": page,
+                    "perPage": PAGE_SIZE,
+                    "skipTotal": "true",
+                },
+                timeout=TIMEOUT,
+            ) as response:
+                response.raise_for_status()
+                items = (await response.json())["items"]
+            records.extend(items)
+            if len(items) < PAGE_SIZE:
+                return records
+            page += 1
+
+    async def _async_optional_list(self, collection):
+        """Fetch a collection that older Hubs do not have."""
+        try:
+            return await self._async_list(collection)
+        except ClientResponseError as err:
+            if err.status == 404:
+                return []
             raise
 
     async def async_get_latest_system_stats(self, since):
         """Fetch each system's latest one-minute record created since a UTC time."""
-        records = await self._async_request(
-            lambda client: client.collection("system_stats").get_full_list(
-                query_params={
-                    "filter": f'type="1m" && created>="{since:%Y-%m-%d %H:%M:%S}.000Z"',
-                    "sort": "-created",
-                },
-            )
+        records = await self._async_list(
+            "system_stats",
+            {
+                "filter": f'type="1m" && created>="{since:%Y-%m-%d %H:%M:%S}.000Z"',
+                "sort": "-created",
+            },
         )
         latest = {}
         for record in records:
-            latest.setdefault(record.system, _record_fields(record))
+            latest.setdefault(record["system"], record)
         return latest
 
     async def async_get_system_details(self):
         """Fetch static system details keyed by system ID."""
-        records = await self._async_request(
-            lambda client: client.collection("system_details").get_full_list()
-        )
-        details = {}
-        for record in records:
-            fields = vars(record)
-            system_id = fields.get("system")
-            if system_id:
-                details[str(system_id)] = fields
-        return details
+        return {
+            str(record["system"]): record
+            for record in await self._async_list("system_details")
+            if record.get("system")
+        }
 
     async def async_get_systems(self):
         """Fetch all systems from the Beszel Hub."""
-        records = await self._async_request(
-            lambda client: client.collection("systems").get_full_list(
-                query_params={"sort": "-status,name"}
-            )
-        )
-        return [vars(record) for record in records]
+        return await self._async_list("systems", {"sort": "-status,name"})
 
     async def async_get_containers(self):
         """Fetch container records, treating Hubs without containers as having none."""
-        try:
-            records = await self._async_request(
-                lambda client: _UnixTimestampService(
-                    client, "containers"
-                ).get_full_list()
-            )
-        except ClientResponseError as err:
-            if err.status == 404:
-                return []
-            raise
-        return [vars(record) for record in records]
+        return await self._async_optional_list("containers")
 
     async def async_get_network_monitors(self):
         """Fetch monitors, treating pre-0.20 Hubs as having no probes."""
-        try:
-            records = await self._async_request(
-                lambda client: client.collection("network_monitors").get_full_list()
-            )
-        except ClientResponseError as err:
-            if err.status == 404:
-                return []
-            raise
-        return [vars(record) for record in records]
+        return await self._async_optional_list("network_monitors")
 
     async def async_get_latest_network_monitor_stats(self, since):
         """Fetch each monitor's latest one-minute sample created since a Unix ms time."""
-        records = await self._async_request(
-            lambda client: _UnixTimestampService(
-                client, "network_monitor_stats"
-            ).get_full_list(
-                query_params={
-                    "filter": f'type="1m" && created>={int(since)}',
-                    "sort": "-created",
-                },
-            )
+        records = await self._async_list(
+            "network_monitor_stats",
+            {"filter": f'type="1m" && created>={int(since)}', "sort": "-created"},
         )
         latest = {}
         for record in records:
-            latest.setdefault(record.monitor, vars(record))
+            latest.setdefault(record["monitor"], record)
         return latest

@@ -4,10 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiohttp import ClientConnectionError
 from homeassistant.config_entries import SOURCE_REAUTH, SOURCE_USER
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import FlowResultType
-from pocketbase.utils import ClientResponseError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.beszel.api import BeszelApiAuthError
@@ -125,7 +125,7 @@ async def test_user_flow_aborts_for_configured_account(hass):
 @pytest.mark.parametrize(
     ("error", "reason"),
     [
-        (ClientResponseError(status=0), "cannot_connect"),
+        (ClientConnectionError(), "cannot_connect"),
         (RuntimeError("unexpected"), "unknown"),
     ],
 )

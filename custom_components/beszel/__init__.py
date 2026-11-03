@@ -1,6 +1,7 @@
 """The Beszel integration."""
 
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import BeszelApiClient
 from .const import PLATFORMS
@@ -11,6 +12,7 @@ from .entity import container_identifier, device_identifier, network_probes_iden
 async def async_setup_entry(hass, entry):
     """Set up Beszel from a config entry."""
     api_client = BeszelApiClient(
+        async_get_clientsession(hass),
         entry.data[CONF_HOST],
         entry.data[CONF_USERNAME],
         entry.data[CONF_PASSWORD],
