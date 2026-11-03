@@ -1,7 +1,5 @@
 """Network probe sensors grouped in a single device per Beszel Hub."""
 
-from dataclasses import dataclass
-
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -28,37 +26,33 @@ from .entity import (
     network_probes_identifier,
 )
 
-
-@dataclass(frozen=True, kw_only=True)
-class NetworkProbeDescription(SensorEntityDescription):
-    """Describe a value derived from a probe's sample counts."""
-
-    state_class: SensorStateClass = SensorStateClass.MEASUREMENT
-
-
 PROBE_SENSOR_DESCRIPTIONS = (
-    NetworkProbeDescription(
+    SensorEntityDescription(
         key="response_time",
         translation_key="probe_response_time",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
-    NetworkProbeDescription(
+    SensorEntityDescription(
         key=ATTR_PROBE_RES_MIN,
         translation_key="probe_min_response_time",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
-    NetworkProbeDescription(
+    SensorEntityDescription(
         key=ATTR_PROBE_RES_MAX,
         translation_key="probe_max_response_time",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.MILLISECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
-    NetworkProbeDescription(
+    SensorEntityDescription(
         key="packet_loss",
         translation_key="probe_packet_loss",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
 )
 
