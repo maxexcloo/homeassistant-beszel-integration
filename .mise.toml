@@ -1,7 +1,4 @@
 # Development
-[tasks.fmt]
-depends = ["fmt:mise", "fmt:oxfmt", "fmt:python"]
-
 # Match the Python version supported by Home Assistant's pinned test dependencies.
 # Install the integration's runtime requirements from its manifest.
 [tasks."test:python"]
