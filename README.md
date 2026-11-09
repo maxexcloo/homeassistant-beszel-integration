@@ -11,18 +11,13 @@ Requires Home Assistant 2026.10.4 or newer and Beszel 0.18.0 or newer.
 ## Features
 
 - Battery level and charging state.
-- Configurable update interval, and options to turn off containers and network probes.
-- Container CPU, memory, network and health sensors in a device per container.
 - CPU model, topology, and utilisation.
 - Diagnostics download with credentials redacted.
 - Disk capacity, throughput, latency, and I/O utilisation.
-- Dynamic discovery when systems or metrics appear after setup.
 - GPU memory, package power, power draw, and utilisation.
 - Memory, swap, network, operating system, status, and uptime sensors.
 - Multiple Beszel Hubs and systems without device or entity collisions.
-- Network probe response times and packet loss in a separate Network Probes device per Hub.
 - Per-filesystem and temperature sensors with distinct identifiers for each metric.
-- Reauthentication and reconfiguration through Home Assistant.
 - Removal of devices for systems the Hub no longer reports.
 - Temporary connection failures and rate limits retry without prompting for credentials.
 - Translated entity names and enum states.
@@ -121,17 +116,12 @@ or the configured probe interval plus two minutes, whichever is longer.
 Install the [shared Mise configuration](https://github.com/maxexcloo/dotfiles#shared-tools--tasks)
 before running local Mise tasks.
 
-1. Fork the repository and create a feature branch.
-2. Follow the repository standards in `AGENTS.md`.
-3. Run the same checks as CI:
+Follow [AGENTS.md](AGENTS.md), include tests and documentation for behavioural
+changes, and submit a pull request. Before submitting, run:
 
-   ```bash
-   mise run check
-   ```
-
-4. Submit a pull request with tests and documentation for behavioural changes.
-
-GitHub CI also runs HACS and Hassfest validation.
+```bash
+mise run check
+```
 
 ## Licence
 
