@@ -78,6 +78,7 @@ class BeszelApiClient:
             raise
 
     async def _async_list_pages(self, collection, params):
+        """Fetch every page of a collection's records."""
         records = []
         page = 1
         while True:
