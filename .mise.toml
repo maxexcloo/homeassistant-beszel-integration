@@ -2,4 +2,5 @@
 # Match the Python version supported by Home Assistant's pinned test dependencies.
 # Install the integration's runtime requirements from its manifest.
 [tasks."test:python"]
+description = "Run Python Tests"
 run = "uv run --no-project --python 3.14 --with-requirements requirements-test.txt $(jq -r '.requirements[] | \"--with=\" + .' custom_components/*/manifest.json) python -B -m pytest"
