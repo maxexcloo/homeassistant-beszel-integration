@@ -88,10 +88,10 @@ expires.
 
 Each container Beszel reports gets its own device under its system, with CPU usage,
 memory used, combined network speed, health and a diagnostic last-report time.
-Measurements are available while the system is up and the container's latest report is no more than
-five minutes old. Health shows **No Health Check** for containers without a Docker
-health check. Recreated containers get new devices; remove old ones from their
-device page once Beszel no longer reports them.
+Measurements are available while the system is up and the container's latest
+report is no more than five minutes old. Health shows **No Health Check** for
+containers without a Docker health check. Recreated containers get new devices;
+remove old ones from their device page once Beszel no longer reports them.
 
 ### Network Probes
 
