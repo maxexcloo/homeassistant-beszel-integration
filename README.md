@@ -80,9 +80,9 @@ Turn off **Containers** or **Network Probes** in the same dialog to monitor only
 systems. Turning an option off stops fetching that data and removes its existing
 devices and entities.
 
-Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the Hub or
-credentials. Home Assistant also prompts for a new password when authentication
-expires.
+Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the
+Hub or credentials. Home Assistant also prompts for a new password when
+authentication expires.
 
 ### Containers
 
@@ -113,7 +113,8 @@ or the configured probe interval plus two minutes, whichever is longer.
 
 ## Contributing
 
-Install the [shared Mise configuration](https://github.com/maxexcloo/dotfiles#shared-tools--tasks)
+Install the
+[shared Mise configuration](https://github.com/maxexcloo/dotfiles#shared-tools--tasks)
 before running local Mise tasks.
 
 Follow [AGENTS.md](AGENTS.md), include tests and documentation for behavioural
