@@ -3,24 +3,9 @@
 [![Check](https://github.com/maxexcloo/homeassistant-beszel-integration/actions/workflows/check.yaml/badge.svg)](https://github.com/maxexcloo/homeassistant-beszel-integration/actions/workflows/check.yaml)
 [![Licence](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 
-Monitor Beszel systems in Home Assistant. Sensors for hardware, operating
-system, storage and network statistics are discovered automatically.
+Monitor Beszel systems, containers and network probes in Home Assistant.
 
 Requires Home Assistant 2026.10.4 or newer and Beszel 0.18.0 or newer.
-
-## Features
-
-- Battery level and charging state.
-- CPU model, topology, and utilisation.
-- Diagnostics download with credentials redacted.
-- Disk capacity, throughput, latency, and I/O utilisation.
-- GPU memory, package power, power draw, and utilisation.
-- Memory, swap, network, operating system, status, and uptime sensors.
-- Multiple Beszel Hubs and systems without device or entity collisions.
-- Per-filesystem and temperature sensors with distinct identifiers for each metric.
-- Removal of devices for systems the Hub no longer reports.
-- Temporary connection failures and rate limits retry without prompting for credentials.
-- Translated entity names and enum states.
 
 ## Installation
 
@@ -43,9 +28,7 @@ cp -R custom_components/beszel/. /config/custom_components/beszel/
 
 Restart Home Assistant after copying the files.
 
-## Usage
-
-### Configuration
+## Configuration
 
 Open **Settings → Devices & Services → Add Integration**, search for **Beszel**,
 and enter:
@@ -54,62 +37,10 @@ and enter:
 - **Username**: The Hub username or email address.
 - **Password**: The Hub password.
 
-Home Assistant only creates a sensor when Beszel reports data for it. New systems
-and metrics are picked up during later updates without reloading the integration.
-Missing measurements show as unavailable, not zero. If the Hub briefly fails to
-return a system's metrics or details, the cached values are kept. Measurement
-sensors are available only while the system is up and the latest one-minute
-statistics record is no more than five minutes old. Missing or invalid record
-timestamps make measurements unavailable; static information and the system
-status remain available.
-
-Capacity and throughput readings use decimal GB, MB and MB/s; Beszel's binary
-quantities are converted.
-
-To add more disks, configure the Beszel agent using the
-[additional disks guide](https://beszel.dev/guide/additional-disks). Each reported
-filesystem gets its own capacity, throughput and I/O sensors. Read and write
-latency, busy time and weighted I/O sensors are disabled by default; enable them on
-the device page when you need them.
-
-Statistics are fetched every minute by default. To store fewer states in the
-recorder, open **Settings → Devices & Services → Beszel → Configure** and set a
-longer **Update Interval**, up to 60 minutes.
-
-Turn off **Containers** or **Network Probes** in the same dialog to monitor only
-systems. Turning an option off stops fetching that data and removes its existing
-devices and entities.
-
-Use **Settings → Devices & Services → Beszel → ⋮ → Reconfigure** to change the
-Hub or credentials. Home Assistant also prompts for a new password when
-authentication expires.
-
-### Containers
-
-Each container Beszel reports gets its own device under its system, with CPU usage,
-memory used, combined network speed, health and a diagnostic last-report time.
-Measurements are available while the system is up and the container's latest
-report is no more than five minutes old. Health shows **No Health Check** for
-containers without a Docker health check. Recreated containers get new devices;
-remove old ones from their device page once Beszel no longer reports them.
-
-### Network Probes
-
-With Beszel Hub and agents 0.20.0 or newer, configure
-[Network Monitors](https://beszel.dev/guide/network-monitors) in Beszel. When any
-system reports probe measurements, the integration automatically creates a
-separate **Network Probes** device in that Hub's integration entry. Older Hubs
-continue to work without probe sensors.
-
-Each monitor provides average, minimum and maximum response time in milliseconds
-and packet loss in percent from its latest one-minute statistics record. Sensor
-names include the probing system, target, protocol and TCP port where applicable.
-Monitors of the same target from different systems or Hubs remain distinct.
-
-Missing measurements and response times without successful probes remain unknown.
-Disabled probes and probes on offline or removed systems are unavailable. Cached
-samples survive temporary API failures, but become unavailable after five minutes
-or the configured probe interval plus two minutes, whichever is longer.
+To monitor more disks, configure the Beszel agent using the
+[additional disks guide](https://beszel.dev/guide/additional-disks). Network
+probe sensors need Beszel Hub and agents 0.20.0 or newer with
+[Network Monitors](https://beszel.dev/guide/network-monitors) configured.
 
 ## Contributing
 
@@ -117,8 +48,7 @@ Install the
 [shared Mise configuration](https://github.com/maxexcloo/dotfiles#shared-tools--tasks)
 before running local Mise tasks.
 
-Follow [AGENTS.md](AGENTS.md), include tests and documentation for behavioural
-changes, and submit a pull request. Before submitting, run:
+Follow [AGENTS.md](AGENTS.md) and submit a pull request. Before submitting, run:
 
 ```bash
 mise run check
