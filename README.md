@@ -5,7 +5,7 @@
 
 Monitor Beszel systems, containers and network probes in Home Assistant.
 
-Requires Home Assistant 2026.10.4 or newer and Beszel 0.18.0 or newer.
+Requires Home Assistant 2026.11.1 or newer and Beszel 0.18.0 or newer.
 
 ## Installation
 
