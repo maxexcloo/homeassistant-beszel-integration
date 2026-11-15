@@ -40,6 +40,9 @@
       "cpu_usage": {
         "default": "mdi:cpu-64-bit"
       },
+      "dashboard_temperature": {
+        "default": "mdi:thermometer"
+      },
       "disk_io_utilisation": {
         "default": "mdi:harddisk"
       },
@@ -72,6 +75,9 @@
       },
       "disk_write_time": {
         "default": "mdi:harddisk"
+      },
+      "failed_services": {
+        "default": "mdi:cog-off-outline"
       },
       "filesystem_io_utilisation": {
         "default": "mdi:harddisk"
@@ -148,6 +154,9 @@
       "operating_system": {
         "default": "mdi:linux"
       },
+      "package_updates": {
+        "default": "mdi:package-up"
+      },
       "probe_max_response_time": {
         "default": "mdi:timer-outline"
       },
@@ -159,6 +168,12 @@
       },
       "probe_response_time": {
         "default": "mdi:timer-outline"
+      },
+      "security_updates": {
+        "default": "mdi:shield-alert-outline"
+      },
+      "services": {
+        "default": "mdi:cog-outline"
       },
       "status": {
         "default": "mdi:server-network"

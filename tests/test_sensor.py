@@ -339,3 +339,38 @@ def test_temperature_names_follow_the_cpu_thermal_rule():
         "amdgpu_edge": "AMDGPU Edge",
         "nvme_composite": "NVMe Composite",
     }
+
+
+@pytest.mark.parametrize(
+    ("info", "expected"),
+    [
+        (
+            {"sv": [0, 0], "pu": [0, 0], "dt": 0},
+            {
+                "services": 0,
+                "failed_services": 0,
+                "package_updates": 0,
+                "security_updates": 0,
+                "dt": 0,
+            },
+        ),
+        (
+            {"sv": [12, 1], "pu": [7]},
+            {"services": 12, "failed_services": 1, "package_updates": 7},
+        ),
+        ({"sv": [], "pu": None}, {}),
+    ],
+)
+def test_summary_metrics_preserve_zero_and_omit_missing_values(info, expected):
+    """An omitted security count is unknown, even when total updates are known."""
+    coordinator = MagicMock()
+    coordinator.config_entry.entry_id = "entry"
+    coordinator.data = {"system": {"info": info}}
+    sensors = {
+        sensor.entity_description.key: sensor
+        for sensor in _create_available_sensors(coordinator, set())
+        if sensor.entity_description.data_source == "info"
+    }
+    assert {key: sensor.native_value for key, sensor in sensors.items()} == expected
+    coordinator.data["system"]["info"] = {}
+    assert all(sensor.native_value is None for sensor in sensors.values())

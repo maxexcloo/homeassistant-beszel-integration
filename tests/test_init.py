@@ -46,7 +46,13 @@ async def test_integration_setup_update_and_unload(hass, freezer):
                     "id": "system",
                     "name": "Server",
                     "status": "up",
-                    "info": {"u": 90},
+                    "info": {
+                        "dt": 42.5,
+                        "pu": [8, 2],
+                        "sv": [60, 1],
+                        "u": 90,
+                        "v": "0.18.0",
+                    },
                 }
             ]
         )
@@ -86,8 +92,21 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         assert state("stats_g_0_u").state == "25.0"
         assert state("info_os").state == "Linux"
         assert state("info_u").state == "90"
+        assert state("info_v").state == "0.18.0"
+        assert state("info_dt").state == "42.5"
+        assert state("info_dt").attributes["device_class"] == "temperature"
+        for suffix, expected in (
+            ("services", "60"),
+            ("failed_services", "1"),
+            ("package_updates", "8"),
+            ("security_updates", "2"),
+        ):
+            assert state(f"info_{suffix}").state == expected
+            assert registry.async_get(
+                state(f"info_{suffix}").entity_id
+            ).entity_category == (EntityCategory.DIAGNOSTIC)
         assert state("container_c1_cpu").state == "1.0"
-        assert len(er.async_entries_for_config_entry(registry, entry.entry_id)) == 12
+        assert len(er.async_entries_for_config_entry(registry, entry.entry_id)) == 18
         assert state("info_os").attributes.get("icon") == "mdi:linux"
         assert registry.async_get(state("info_os").entity_id).entity_category == (
             EntityCategory.DIAGNOSTIC
@@ -120,6 +139,14 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         assert state("temperature_cpu").state == "47.0"
         assert state("stats_cpu").state == "unknown"
         assert state("info_os").state == "unknown"
+        for suffix in (
+            "dt",
+            "services",
+            "failed_services",
+            "package_updates",
+            "security_updates",
+        ):
+            assert state(f"info_{suffix}").state == "unknown"
         assert coordinator._listeners
 
         device_registry = dr.async_get(hass)
