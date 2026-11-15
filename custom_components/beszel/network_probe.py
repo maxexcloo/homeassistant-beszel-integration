@@ -92,7 +92,7 @@ def create_network_probe_sensors(coordinator, known_unique_ids):
     """Discover probe measurements as they appear on any system."""
     entities = []
     for system_id, system in coordinator.data.items():
-        for monitor_id, probe in mapping(system.get("network_probes")).items():
+        for monitor_id, probe in system.get("network_probes", {}).items():
             for description in PROBE_SENSOR_DESCRIPTIONS:
                 unique_id = _probe_unique_id(
                     coordinator, system_id, monitor_id, description
@@ -135,9 +135,7 @@ class BeszelNetworkProbeSensor(BeszelEntity, SensorEntity):
     @property
     def probe(self):
         """Return the latest configuration and sample for this monitor."""
-        return mapping(
-            mapping(self.system_data.get("network_probes")).get(self._monitor_id)
-        )
+        return self.system_data.get("network_probes", {}).get(self._monitor_id, {})
 
     @property
     def available(self):
