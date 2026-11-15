@@ -120,6 +120,9 @@
       "cpu_usage": {
         "name": "CPU Usage"
       },
+      "dashboard_temperature": {
+        "name": "Dashboard Temperature"
+      },
       "disk_io_utilisation": {
         "name": "Disk I/O Utilisation"
       },
@@ -152,6 +155,9 @@
       },
       "disk_write_time": {
         "name": "Disk Write Time"
+      },
+      "failed_services": {
+        "name": "Failed Services"
       },
       "filesystem_io_utilisation": {
         "name": "{filesystem} I/O Utilisation"
@@ -228,6 +234,9 @@
       "operating_system": {
         "name": "Operating System"
       },
+      "package_updates": {
+        "name": "Package Updates"
+      },
       "probe_max_response_time": {
         "name": "{probe} Maximum Response Time"
       },
@@ -239,6 +248,12 @@
       },
       "probe_response_time": {
         "name": "{probe} Response Time"
+      },
+      "security_updates": {
+        "name": "Security Updates"
+      },
+      "services": {
+        "name": "Services"
       },
       "status": {
         "name": "Status",
