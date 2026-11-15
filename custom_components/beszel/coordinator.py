@@ -83,7 +83,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
 
             containers, details, probes, records = await asyncio.gather(
                 self._fetch_containers(systems),
-                self._fetch_system_details(),
+                self._fetch_system_details(systems),
                 self._fetch_network_probes(systems),
                 self._fetch_system_stats(systems),
             )
@@ -196,7 +196,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             }
         return probes
 
-    async def _fetch_system_details(self):
+    async def _fetch_system_details(self, systems):
         """Fetch static system details, reusing the last details on failure."""
         try:
             self._details = await self.api_client.async_get_system_details()
@@ -204,8 +204,9 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             raise
         except Exception as err:  # noqa: BLE001 - details are best-effort
             _LOGGER.warning(
-                "Error fetching system details from Beszel Hub %s: %s",
+                "Error fetching system details from Beszel Hub %s for systems %s: %s",
                 self.api_client.host,
+                _system_names(systems),
                 err,
             )
         return self._details
