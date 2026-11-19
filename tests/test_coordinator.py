@@ -17,9 +17,6 @@ class FakeApiClient:
 
     host = "http://beszel.local"
 
-    async def async_authenticate(self):
-        """Authenticate successfully."""
-
     async def async_get_latest_system_stats(self, since):
         """Return fresh stats for every system except the failed one."""
         record = {"stats": {"cpu": 12.5}, "created": dt_util.utcnow().isoformat()}
@@ -220,7 +217,9 @@ class TestBeszelDataUpdateCoordinator:
             api_client=AuthenticationFailureApi(),
             config_entry=MockConfigEntry(domain=DOMAIN),
         )
-        with pytest.raises(ConfigEntryAuthFailed, match="beszel.local"):
+        with pytest.raises(
+            ConfigEntryAuthFailed, match=r"beszel\.local for systems Server \(system\)"
+        ):
             await coordinator._async_update_data()
 
     async def test_missing_statistics_remain_unavailable(self, hass):

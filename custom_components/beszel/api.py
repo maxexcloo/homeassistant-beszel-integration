@@ -1,5 +1,7 @@
 """API for Beszel."""
 
+from asyncio import Lock
+
 from aiohttp import ClientResponseError, ClientTimeout
 
 PAGE_SIZE = 500
@@ -27,6 +29,7 @@ class BeszelApiClient:
 
     def __init__(self, session, host, username, password):
         """Initialise the API client."""
+        self._auth_lock = Lock()
         self._host = normalise_host(host)
         self._password = password
         self._session = session
@@ -58,33 +61,41 @@ class BeszelApiClient:
 
         raise BeszelApiAuthError("Authentication failed") from last_error
 
+    async def _async_refresh_token(self, rejected_token):
+        async with self._auth_lock:
+            if self._token is None or self._token == rejected_token:
+                await self.async_authenticate()
+            return self._token
+
     async def _async_list(self, collection, params=None):
         """Fetch every record of a collection, logging in again once if rejected."""
-        if self._token is None:
-            await self.async_authenticate()
+        token = self._token
+        if token is None:
+            token = await self._async_refresh_token(token)
         try:
-            return await self._async_list_pages(collection, params)
+            return await self._async_list_pages(collection, params, token)
         except ClientResponseError as err:
             if err.status not in (401, 403):
                 raise
         # Tokens expire, so only a rejected fresh token means invalid credentials.
-        await self.async_authenticate()
+        token = await self._async_refresh_token(token)
         try:
-            return await self._async_list_pages(collection, params)
+            return await self._async_list_pages(collection, params, token)
         except ClientResponseError as err:
             if err.status in (401, 403):
-                self._token = None
+                if self._token == token:
+                    self._token = None
                 raise BeszelApiAuthError("Beszel Hub rejected the session") from err
             raise
 
-    async def _async_list_pages(self, collection, params):
+    async def _async_list_pages(self, collection, params, token):
         """Fetch every page of a collection's records."""
         records = []
         page = 1
         while True:
             async with self._session.get(
                 f"{self._host}/api/collections/{collection}/records",
-                headers={"Authorization": self._token},
+                headers={"Authorization": token},
                 params={
                     **(params or {}),
                     "page": page,

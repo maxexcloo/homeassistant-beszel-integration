@@ -1,5 +1,6 @@
 """Tests for the Beszel API client."""
 
+from asyncio import Barrier, gather
 from datetime import UTC, datetime
 from http import HTTPStatus
 
@@ -178,6 +179,41 @@ async def test_expired_token_logs_in_again(client, aioclient_mock):
     aioclient_mock.post(SUPERUSERS, json={"token": "token"})
     aioclient_mock.get(records_url("systems"), side_effect=expire_once)
     assert await client.async_get_systems() == []
+    assert sum(call[0].lower() == "post" for call in aioclient_mock.mock_calls) == 2
+
+
+async def test_parallel_requests_share_token_refresh(client, aioclient_mock):
+    """Reads that reject the same session share a single reauthentication."""
+    tokens = iter(("expired", "fresh"))
+    first_reads = Barrier(2)
+    reads = 0
+
+    async def authenticate(method, url, data):
+        return AiohttpClientMockResponse(
+            method, url, json={"token": next(tokens, "fresh")}
+        )
+
+    async def expire_session(method, url, data):
+        nonlocal reads
+        reads += 1
+        expired = reads <= 2
+        if expired:
+            await first_reads.wait()
+        return AiohttpClientMockResponse(
+            method,
+            url,
+            status=HTTPStatus.UNAUTHORIZED if expired else HTTPStatus.OK,
+            json={"items": []},
+        )
+
+    aioclient_mock.post(SUPERUSERS, side_effect=authenticate)
+    aioclient_mock.get(records_url("containers"), side_effect=expire_session)
+    aioclient_mock.get(records_url("network_monitors"), side_effect=expire_session)
+    await client.async_authenticate()
+
+    assert await gather(
+        client.async_get_containers(), client.async_get_network_monitors()
+    ) == [[], []]
     assert sum(call[0].lower() == "post" for call in aioclient_mock.mock_calls) == 2
 
 
