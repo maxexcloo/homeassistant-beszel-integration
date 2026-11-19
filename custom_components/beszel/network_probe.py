@@ -7,6 +7,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE, UnitOfTime
+from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -120,17 +121,27 @@ class BeszelNetworkProbeSensor(BeszelEntity, SensorEntity):
         self._attr_unique_id = _probe_unique_id(
             coordinator, system_id, monitor_id, description
         )
-        probe = self.probe
+        self._attr_translation_placeholders = {"probe": self._probe_label(self.probe)}
+
+    def _probe_label(self, probe):
         protocol = probe.get("protocol")
-        target = str(probe.get("target", monitor_id))
+        target = str(probe.get("target", self._monitor_id))
         if protocol == "tcp":
             if ":" in target and not target.startswith("["):
                 target = f"[{target}]"
             target = f"{target}:{probe.get('port')}"
-        system = self.system_data.get("name", system_id)
-        self._attr_translation_placeholders = {
-            "probe": f"{system} {target} ({str(protocol or '').upper()})"
-        }
+        system = self.system_data.get("name", self._system_id)
+        return f"{system} {target} ({str(protocol or '').upper()})"
+
+    @callback
+    def _handle_coordinator_update(self):
+        if probe := self.probe:
+            label = self._probe_label(probe)
+            if label != self._attr_translation_placeholders["probe"]:
+                self._attr_translation_placeholders["probe"] = label
+                # Home Assistant caches the translated name.
+                self.__dict__.pop("name", None)
+        super()._handle_coordinator_update()
 
     @property
     def probe(self):

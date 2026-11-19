@@ -263,6 +263,21 @@ async def test_probe_device_is_discovered_updated_and_removable(hass, freezer):
         )
         assert hass.states.get(entity_id).state == "12.0"
         assert "one example.com (ICMP)" in hass.states.get(entity_id).name
+
+        monitor = api.async_get_network_monitors.return_value[0]
+        monitor.update(target="new.example.com", protocol="tcp", port=443)
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert "one new.example.com:443 (TCP)" in hass.states.get(entity_id).name
+        entities.async_update_entity(entity_id, name="My Probe")
+        monitor["target"] = "other.example.com"
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert hass.states.get(entity_id).name == "My Probe"
+        assert (
+            "other.example.com:443 (TCP)" in entities.async_get(entity_id).original_name
+        )
+
         api.async_get_latest_network_monitor_stats.side_effect = RuntimeError(
             "probe failed"
         )
