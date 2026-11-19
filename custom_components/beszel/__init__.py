@@ -5,7 +5,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import BeszelApiClient
-from .const import CONF_CONTAINERS, CONF_NETWORK_PROBES, PLATFORMS
+from .const import (
+    CONF_CONTAINERS,
+    CONF_NETWORK_PROBES,
+    DEFAULT_CONTAINERS,
+    DEFAULT_NETWORK_PROBES,
+    PLATFORMS,
+)
 from .coordinator import BeszelDataUpdateCoordinator
 from .entity import container_identifier, device_identifier, network_probes_identifier
 
@@ -35,8 +41,8 @@ async def async_setup_entry(hass, entry):
 
 def _async_remove_disabled_devices(hass, entry):
     """Remove devices, and their entities, for disabled options."""
-    containers = entry.options.get(CONF_CONTAINERS, True)
-    network_probes = entry.options.get(CONF_NETWORK_PROBES, True)
+    containers = entry.options.get(CONF_CONTAINERS, DEFAULT_CONTAINERS)
+    network_probes = entry.options.get(CONF_NETWORK_PROBES, DEFAULT_NETWORK_PROBES)
     device_registry = dr.async_get(hass)
     for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
         if (

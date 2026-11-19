@@ -7,6 +7,8 @@ from homeassistant.const import Platform
 CONF_CONTAINERS = "containers"
 CONF_NETWORK_PROBES = "network_probes"
 CONF_UPDATE_INTERVAL = "update_interval"
+DEFAULT_CONTAINERS = True
+DEFAULT_NETWORK_PROBES = True
 DEFAULT_UPDATE_INTERVAL = 1
 DOMAIN = "beszel"
 MANUFACTURER = "Beszel"

@@ -17,6 +17,8 @@ from .const import (
     CONF_CONTAINERS,
     CONF_NETWORK_PROBES,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_CONTAINERS,
+    DEFAULT_NETWORK_PROBES,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     STATS_MAX_AGE,
@@ -75,6 +77,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API endpoint."""
+        systems = []
         try:
             systems = await self.api_client.async_get_systems()
             if not systems:
@@ -88,6 +91,11 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 self._fetch_system_stats(systems),
             )
 
+            stats_created_key = "created"
+            if records is None:
+                records = self.data or {}
+                stats_created_key = "stats_created"
+
             all_system_data = {}
             for system in systems:
                 system_id = system["id"]
@@ -100,15 +108,18 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                     "name": system.get("name", system_id),
                     "network_probes": probes.get(system_id, {}),
                     "stats": record.get("stats"),
-                    "stats_created": record.get("created"),
+                    "stats_created": record.get(stats_created_key),
                     "status": system.get("status", "unknown"),
                 }
 
             return all_system_data
 
         except BeszelApiAuthError as err:
+            scope = f"Beszel Hub {self.api_client.host}"
+            if systems:
+                scope = f"{scope} for systems {_system_names(systems)}"
             raise ConfigEntryAuthFailed(
-                f"Authentication failed for Beszel Hub {self.api_client.host}: {err}"
+                f"Authentication failed for {scope}: {err}"
             ) from err
         except Exception as err:
             raise UpdateFailed(
@@ -117,7 +128,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _fetch_containers(self, systems):
         """Fetch container reports, reusing the cached reports on failure."""
-        if not self.config_entry.options.get(CONF_CONTAINERS, True):
+        if not self.config_entry.options.get(CONF_CONTAINERS, DEFAULT_CONTAINERS):
             return {}
         try:
             records = await self.api_client.async_get_containers()
@@ -141,7 +152,9 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _fetch_network_probes(self, systems):
         """Fetch probes independently, preserving each failed sample's cache."""
-        if not self.config_entry.options.get(CONF_NETWORK_PROBES, True):
+        if not self.config_entry.options.get(
+            CONF_NETWORK_PROBES, DEFAULT_NETWORK_PROBES
+        ):
             return {}
         cached = {
             system["id"]: (self.data or {})
@@ -163,9 +176,8 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
             return cached
 
         monitors = [monitor for monitor in monitors if monitor.get("system") in cached]
-        probes = {system["id"]: {} for system in systems}
         if not monitors:
-            return probes
+            return {}
         # Older samples would be unavailable, so fetch only those still fresh enough.
         max_age = max(probe_max_age(monitor.get("interval")) for monitor in monitors)
         since = (dt_util.utcnow().timestamp() - max_age) * 1000
@@ -189,8 +201,9 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 .get("stats")
                 for monitor in monitors
             }
+        probes = {}
         for monitor in monitors:
-            probes[monitor["system"]][monitor["id"]] = {
+            probes.setdefault(monitor["system"], {})[monitor["id"]] = {
                 **monitor,
                 "stats": records.get(monitor["id"]),
             }
@@ -212,7 +225,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
         return self._details
 
     async def _fetch_system_stats(self, systems):
-        """Fetch fresh statistics records, reusing cached records on failure."""
+        """Fetch fresh statistics records, returning None on a partial failure."""
         try:
             return await self.api_client.async_get_latest_system_stats(
                 dt_util.utcnow() - STATS_MAX_AGE
@@ -226,10 +239,4 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 _system_names(systems),
                 err,
             )
-            return {
-                system_id: {
-                    "created": system.get("stats_created"),
-                    "stats": system.get("stats"),
-                }
-                for system_id, system in (self.data or {}).items()
-            }
+            return None

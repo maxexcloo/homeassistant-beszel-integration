@@ -99,6 +99,15 @@ class BeszelSensorDescription(SensorEntityDescription):
     value_fn: ValueFunction | None = None
 
 
+_BATTERY_STATES = {
+    0: "unknown",
+    1: "empty",
+    2: "full",
+    3: "charging",
+    4: "discharging",
+    5: "idle",
+}
+
 # Percentages are rounded; Beszel's binary capacities keep the existing decimal units.
 _UNIT_SCALES = {
     PERCENTAGE: 1,
@@ -145,18 +154,10 @@ def _battery_percent(data):
 
 def _battery_state(data):
     """Return the Beszel battery charge state."""
-    states = {
-        0: "unknown",
-        1: "empty",
-        2: "full",
-        3: "charging",
-        4: "discharging",
-        5: "idle",
-    }
     value = as_number(_array_item(data, ATTR_BATTERY, 1))
     if value is None or not _has_battery(data):
         return None
-    return states.get(round(value), "unknown")
+    return _BATTERY_STATES.get(round(value), _BATTERY_STATES[0])
 
 
 def _used_percent(data, total_key, used_key):
@@ -342,7 +343,7 @@ STATS_SENSOR_DESCRIPTIONS = (
         key="battery_state",
         translation_key="battery_state",
         device_class=SensorDeviceClass.ENUM,
-        options=["charging", "discharging", "empty", "full", "idle", "unknown"],
+        options=sorted(_BATTERY_STATES.values()),
         value_fn=_battery_state,
     ),
     BeszelSensorDescription(

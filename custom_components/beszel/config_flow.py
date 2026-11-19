@@ -20,6 +20,8 @@ from .const import (
     CONF_CONTAINERS,
     CONF_NETWORK_PROBES,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_CONTAINERS,
+    DEFAULT_NETWORK_PROBES,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
 )
@@ -36,8 +38,10 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 OPTIONS_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_CONTAINERS, default=True): BooleanSelector(),
-        vol.Required(CONF_NETWORK_PROBES, default=True): BooleanSelector(),
+        vol.Required(CONF_CONTAINERS, default=DEFAULT_CONTAINERS): BooleanSelector(),
+        vol.Required(
+            CONF_NETWORK_PROBES, default=DEFAULT_NETWORK_PROBES
+        ): BooleanSelector(),
         vol.Required(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): vol.All(
             NumberSelector(
                 NumberSelectorConfig(
