@@ -297,3 +297,103 @@ async def test_probe_device_is_discovered_updated_and_removable(hass, freezer):
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
         assert not coordinator._listeners
+
+
+async def test_renumbered_gpus_and_temperatures_are_removed(hass):
+    """Remove replaced GPU and suffixed temperature entities only from fresh reports."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Beszel",
+        data={
+            "host": "http://beszel.local",
+            "password": "password",
+            "username": "user",
+        },
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    prefix = f"beszel_{entry.entry_id}_system"
+
+    def stats(gpu_key, suffix, temperatures=True):
+        return {
+            "system": {
+                "created": dt_util.utcnow().isoformat(),
+                "stats": {
+                    "g": {
+                        gpu_key: {"n": f"GPU {gpu_key}", "u": 1},
+                        "x": {"n": "GPU x", "u": 1},
+                    },
+                    "t": {
+                        "acpitz": 40,
+                        "edge": 50,
+                        f"edge_{suffix}": 51,
+                        f"GPU {gpu_key}": 52,
+                    }
+                    if temperatures
+                    else {},
+                },
+            }
+        }
+
+    def unique_ids():
+        return {
+            entity.unique_id.removeprefix(f"{prefix}_")
+            for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+            if "_g_" in entity.unique_id or "temperature_" in entity.unique_id
+        }
+
+    with patch("custom_components.beszel.BeszelApiClient", autospec=True) as api_class:
+        api = api_class.return_value
+        api.host = "http://beszel.local"
+        api.async_get_containers.return_value = []
+        api.async_get_network_monitors.return_value = []
+        api.async_get_systems.return_value = [
+            {"id": "system", "name": "Server", "status": "up"}
+        ]
+        api.async_get_system_details.return_value = {}
+        api.async_get_latest_system_stats.return_value = stats("1", 7)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        coordinator = entry.runtime_data
+        assert unique_ids() == {
+            "stats_g_1_u",
+            "stats_g_x_u",
+            "temperature_GPU 1",
+            "temperature_acpitz",
+            "temperature_edge",
+            "temperature_edge_7",
+        }
+
+        initial = unique_ids()
+        api.async_get_systems.return_value = [
+            {"id": "system", "name": "Server", "status": "down"}
+        ]
+        api.async_get_latest_system_stats.return_value = stats("2", 9)
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert initial <= unique_ids()
+
+        api.async_get_systems.return_value = [
+            {"id": "system", "name": "Server", "status": "up"}
+        ]
+        api.async_get_latest_system_stats.return_value = stats("2", 9, False)
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert "stats_g_1_u" not in unique_ids()
+        assert {"temperature_GPU 1", "temperature_edge_7"} <= unique_ids()
+
+        stats_2 = stats("2", 9)
+        del stats_2["system"]["stats"]["t"]["acpitz"]
+        api.async_get_latest_system_stats.return_value = stats_2
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert unique_ids() == {
+            "stats_g_2_u",
+            "stats_g_x_u",
+            "temperature_GPU 2",
+            "temperature_acpitz",
+            "temperature_edge",
+            "temperature_edge_9",
+        }
+        assert await hass.config_entries.async_unload(entry.entry_id)
