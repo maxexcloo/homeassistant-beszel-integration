@@ -1,5 +1,6 @@
 """Sensor platform for Beszel."""
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
@@ -22,6 +23,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -87,6 +89,8 @@ from .entity import (
     os_name,
 )
 from .network_probe import create_network_probe_sensors
+
+_LOGGER = logging.getLogger(__name__)
 
 ValueFunction = Callable[[dict[str, Any]], Any]
 
@@ -205,6 +209,18 @@ def _temperature_name(key):
     return " ".join(
         _TEMPERATURE_WORDS.get(word.lower(), word[:1].upper() + word[1:])
         for word in key.replace("_", " ").split()
+    )
+
+
+def _has_fresh_stats(system_data):
+    """Return whether an online system's statistics are recent enough to show."""
+    created = system_data.get("stats_created")
+    timestamp = dt_util.parse_datetime(created) if isinstance(created, str) else None
+    return (
+        str(system_data.get("status")).lower() == "up"
+        and timestamp is not None
+        and timestamp.tzinfo is not None
+        and timedelta(0) <= dt_util.utcnow() - timestamp <= STATS_MAX_AGE
     )
 
 
@@ -674,6 +690,49 @@ def _temperature_unique_id(coordinator, system_id, temperature_key):
     )
 
 
+def _is_stale_temperature(key, temperatures, gpus):
+    """Return whether a missing temperature key carries a Beszel duplicate suffix."""
+    # Beszel appends "_<sensor index>" to repeated sensor keys and " <GPU key>"
+    # to repeated GPU names, and both change when the host restarts.
+    base, separator, suffix = key.rpartition("_")
+    if separator and suffix.isdigit() and base in temperatures:
+        return True
+    base, separator, _ = key.rpartition(" ")
+    return bool(separator) and any(
+        mapping(gpu).get(ATTR_GPU_NAME) == f"{base} {gpu_key}"
+        for gpu_key, gpu in gpus.items()
+    )
+
+
+def _stale_unique_ids(coordinator, system_id, system_data, unique_ids):
+    """Return GPU and temperature unique IDs a fresh system report has replaced."""
+    stats = mapping(system_data.get("stats"))
+    gpus = mapping(stats.get(ATTR_GPU_DATA))
+    temperatures = mapping(stats.get(ATTR_TEMPERATURES))
+    entry_id = coordinator.config_entry.entry_id
+    gpu_prefix = entity_unique_id(entry_id, system_id, f"stats_{ATTR_GPU_DATA}_")
+    temperature_prefix = _temperature_unique_id(coordinator, system_id, "")
+    reported_gpus = {
+        _nested_unique_id(coordinator, system_id, ATTR_GPU_DATA, gpu_key, desc.key)
+        for gpu_key in gpus
+        for desc in GPU_SENSOR_DESCRIPTIONS
+    }
+    stale = set()
+    for unique_id in unique_ids:
+        if unique_id.startswith(gpu_prefix):
+            if gpus and unique_id not in reported_gpus:
+                stale.add(unique_id)
+        elif unique_id.startswith(temperature_prefix):
+            key = unique_id.removeprefix(temperature_prefix)
+            if (
+                temperatures
+                and key not in temperatures
+                and _is_stale_temperature(key, temperatures, gpus)
+            ):
+                stale.add(unique_id)
+    return stale
+
+
 def _create_available_sensors(coordinator, known_unique_ids):
     """Create sensors for newly reported Beszel values."""
     entities = []
@@ -744,6 +803,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Beszel sensor entities based on a config entry."""
     coordinator = entry.runtime_data
     device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
     known_unique_ids = set()
 
     def update_device(identifier, details):
@@ -772,9 +832,34 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     container_details(container_id, container),
                 )
 
+    def remove_stale_entities():
+        entity_ids = {
+            registry_entry.unique_id: registry_entry.entity_id
+            for registry_entry in er.async_entries_for_config_entry(
+                entity_registry, entry.entry_id
+            )
+        }
+        for system_id, system_data in coordinator.data.items():
+            if not _has_fresh_stats(system_data):
+                continue
+            for unique_id in _stale_unique_ids(
+                coordinator, system_id, system_data, entity_ids
+            ):
+                entity_id = entity_ids[unique_id]
+                _LOGGER.info(
+                    "Removing %s, which Beszel Hub %s no longer reports for %s (%s)",
+                    entity_id,
+                    coordinator.api_client.host,
+                    system_data.get("name", system_id),
+                    system_id,
+                )
+                entity_registry.async_remove(entity_id)
+                known_unique_ids.discard(unique_id)
+
     @callback
     def async_discover_entities():
         update_registered_devices()
+        remove_stale_entities()
         new_entities = _create_available_sensors(coordinator, known_unique_ids)
         if new_entities:
             known_unique_ids.update(entity.unique_id for entity in new_entities)
@@ -799,16 +884,7 @@ class BeszelCoordinatorSensor(BeszelEntity, SensorEntity):
             return False
         if self.entity_description.data_source != "stats":
             return True
-        created = self.system_data.get("stats_created")
-        timestamp = (
-            dt_util.parse_datetime(created) if isinstance(created, str) else None
-        )
-        return (
-            self.is_up
-            and timestamp is not None
-            and timestamp.tzinfo is not None
-            and timedelta(0) <= dt_util.utcnow() - timestamp <= STATS_MAX_AGE
-        )
+        return _has_fresh_stats(self.system_data)
 
 
 class BeszelNestedSensor(BeszelCoordinatorSensor):
