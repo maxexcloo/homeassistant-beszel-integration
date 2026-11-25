@@ -12,7 +12,7 @@ DEFAULT_NETWORK_PROBES = True
 DEFAULT_UPDATE_INTERVAL = 1
 DOMAIN = "beszel"
 MANUFACTURER = "Beszel"
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 # Statistics records older than this no longer describe the system's current state.
 STATS_MAX_AGE = timedelta(minutes=5)
 
@@ -49,6 +49,7 @@ ATTR_DISK_USED_GB = "du"
 ATTR_DISK_WRITE_PS_MB = "dw"
 ATTR_EXTRA_FS = "efs"
 ATTR_GPU_DATA = "g"
+ATTR_LOAD_AVERAGE = "la"
 ATTR_MEM_BUFF_CACHE_GB = "mb"
 ATTR_MEM_PERCENT = "mp"
 ATTR_MEM_TOTAL_GB = "m"
@@ -95,3 +96,10 @@ ATTR_PROBE_RES_MIN = "res_min"
 ATTR_PROBE_RES_SUM = "res_sum"
 ATTR_PROBE_SUCCESS_COUNT = "success_count"
 ATTR_PROBE_TOTAL_COUNT = "total_count"
+
+# Beszel smart_devices collection fields
+ATTR_SMART_CYCLES = "cycles"
+ATTR_SMART_HOURS = "hours"
+ATTR_SMART_NAME = "name"
+ATTR_SMART_STATE = "state"
+ATTR_SMART_TEMPERATURE = "temp"

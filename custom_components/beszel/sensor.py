@@ -58,6 +58,7 @@ from .const import (
     ATTR_GPU_POWER_W,
     ATTR_GPU_USAGE_PERCENT,
     ATTR_KERNEL_VERSION,
+    ATTR_LOAD_AVERAGE,
     ATTR_MEM_BUFF_CACHE_GB,
     ATTR_MEM_PERCENT,
     ATTR_MEM_TOTAL_GB,
@@ -89,6 +90,7 @@ from .entity import (
     os_name,
 )
 from .network_probe import create_network_probe_sensors
+from .smart import create_smart_sensors
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -453,6 +455,17 @@ STATS_SENSOR_DESCRIPTIONS = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _rounded(_array_item(data, ATTR_DISK_IO_STATS, 1)),
     ),
+    *(
+        BeszelSensorDescription(
+            key=f"load_average_{minutes}m",
+            translation_key=f"load_average_{minutes}m",
+            state_class=SensorStateClass.MEASUREMENT,
+            value_fn=lambda data, index=index: as_number(
+                _array_item(data, ATTR_LOAD_AVERAGE, index)
+            ),
+        )
+        for index, minutes in enumerate((1, 5, 15))
+    ),
     BeszelSensorDescription(
         key=ATTR_MEM_BUFF_CACHE_GB,
         translation_key="memory_buffer_cache",
@@ -796,6 +809,7 @@ def _create_available_sensors(coordinator, known_unique_ids):
 
     entities.extend(create_container_sensors(coordinator, known_unique_ids))
     entities.extend(create_network_probe_sensors(coordinator, known_unique_ids))
+    entities.extend(create_smart_sensors(coordinator, known_unique_ids))
     return entities
 
 

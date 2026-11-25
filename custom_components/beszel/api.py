@@ -4,6 +4,14 @@ from asyncio import Lock
 
 from aiohttp import ClientResponseError, ClientTimeout
 
+from .const import (
+    ATTR_SMART_CYCLES,
+    ATTR_SMART_HOURS,
+    ATTR_SMART_NAME,
+    ATTR_SMART_STATE,
+    ATTR_SMART_TEMPERATURE,
+)
+
 PAGE_SIZE = 500
 TIMEOUT = ClientTimeout(total=30)
 
@@ -111,10 +119,10 @@ class BeszelApiClient:
                 return records
             page += 1
 
-    async def _async_optional_list(self, collection):
+    async def _async_optional_list(self, collection, params=None):
         """Fetch a collection that older Hubs do not have."""
         try:
-            return await self._async_list(collection)
+            return await self._async_list(collection, params)
         except ClientResponseError as err:
             if err.status == 404:
                 return []
@@ -153,6 +161,21 @@ class BeszelApiClient:
     async def async_get_network_monitors(self):
         """Fetch monitors, treating pre-0.20 Hubs as having no probes."""
         return await self._async_optional_list("network_monitors")
+
+    async def async_get_smart_devices(self):
+        """Fetch reported drives, treating Hubs without S.M.A.R.T. as having none."""
+        fields = (
+            "id",
+            "system",
+            ATTR_SMART_CYCLES,
+            ATTR_SMART_HOURS,
+            ATTR_SMART_NAME,
+            ATTR_SMART_STATE,
+            ATTR_SMART_TEMPERATURE,
+        )
+        return await self._async_optional_list(
+            "smart_devices", {"fields": ",".join(fields)}
+        )
 
     async def async_get_latest_network_monitor_stats(self, since):
         """Fetch each monitor's latest one-minute sample created since a Unix ms time."""

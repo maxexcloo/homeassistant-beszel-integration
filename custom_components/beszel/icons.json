@@ -1,5 +1,10 @@
 {
   "entity": {
+    "binary_sensor": {
+      "smart_problem": {
+        "default": "mdi:harddisk"
+      }
+    },
     "sensor": {
       "agent_version": {
         "default": "mdi:information-outline"
@@ -130,6 +135,15 @@
       "kernel_version": {
         "default": "mdi:chip"
       },
+      "load_average_15m": {
+        "default": "mdi:gauge"
+      },
+      "load_average_1m": {
+        "default": "mdi:gauge"
+      },
+      "load_average_5m": {
+        "default": "mdi:gauge"
+      },
       "memory_buffer_cache": {
         "default": "mdi:memory"
       },
@@ -174,6 +188,15 @@
       },
       "services": {
         "default": "mdi:cog-outline"
+      },
+      "smart_power_cycles": {
+        "default": "mdi:restart"
+      },
+      "smart_power_on_hours": {
+        "default": "mdi:timer-outline"
+      },
+      "smart_temperature": {
+        "default": "mdi:thermometer"
       },
       "status": {
         "default": "mdi:server-network"
