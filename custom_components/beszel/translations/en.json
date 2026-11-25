@@ -66,6 +66,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "smart_problem": {
+        "name": "{disk} S.M.A.R.T. Problem"
+      }
+    },
     "sensor": {
       "agent_version": {
         "name": "Agent Version"
@@ -210,6 +215,15 @@
       "kernel_version": {
         "name": "Kernel Version"
       },
+      "load_average_15m": {
+        "name": "15-Minute Load Average"
+      },
+      "load_average_1m": {
+        "name": "1-Minute Load Average"
+      },
+      "load_average_5m": {
+        "name": "5-Minute Load Average"
+      },
       "memory_buffer_cache": {
         "name": "Memory Buffer/Cache"
       },
@@ -254,6 +268,15 @@
       },
       "services": {
         "name": "Services"
+      },
+      "smart_power_cycles": {
+        "name": "{disk} Power Cycles"
+      },
+      "smart_power_on_hours": {
+        "name": "{disk} Power-On Hours"
+      },
+      "smart_temperature": {
+        "name": "{disk} Temperature"
       },
       "status": {
         "name": "Status",

@@ -142,12 +142,16 @@ async def test_only_missing_optional_collections_are_empty(
     aioclient_mock.post(SUPERUSERS, json={"token": "token"})
     aioclient_mock.get(records_url("containers"), status=status)
     aioclient_mock.get(records_url("network_monitors"), status=status)
+    aioclient_mock.get(records_url("smart_devices"), status=status)
     if status == 404:
         assert await client.async_get_containers() == []
         assert await client.async_get_network_monitors() == []
+        assert await client.async_get_smart_devices() == []
     else:
         with pytest.raises(ClientResponseError):
             await client.async_get_containers()
+        with pytest.raises(ClientResponseError):
+            await client.async_get_smart_devices()
 
 
 async def test_requests_reuse_authentication_and_page(client, aioclient_mock):

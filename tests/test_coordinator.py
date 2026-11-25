@@ -30,6 +30,10 @@ class FakeApiClient:
         """Return no probes by default."""
         return []
 
+    async def async_get_smart_devices(self):
+        """Return no disk reports by default."""
+        return []
+
     async def async_get_system_details(self):
         """Return no static system details by default."""
         return {}

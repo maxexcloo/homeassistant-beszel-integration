@@ -84,10 +84,11 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("No systems found on Beszel Hub %s", self.api_client.host)
                 return {}
 
-            containers, details, probes, records = await asyncio.gather(
+            containers, details, probes, smart_devices, records = await asyncio.gather(
                 self._fetch_containers(systems),
                 self._fetch_system_details(systems),
                 self._fetch_network_probes(systems),
+                self._fetch_smart_devices(systems),
                 self._fetch_system_stats(systems),
             )
 
@@ -107,6 +108,7 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                     ),
                     "name": system.get("name", system_id),
                     "network_probes": probes.get(system_id, {}),
+                    "smart_devices": smart_devices.get(system_id, {}),
                     "stats": record.get("stats"),
                     "stats_created": record.get(stats_created_key),
                     "status": system.get("status", "unknown"),
@@ -223,6 +225,28 @@ class BeszelDataUpdateCoordinator(DataUpdateCoordinator):
                 err,
             )
         return self._details
+
+    async def _fetch_smart_devices(self, systems):
+        """Fetch S.M.A.R.T. reports, reusing the cached reports on failure."""
+        try:
+            records = await self.api_client.async_get_smart_devices()
+        except BeszelApiAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - S.M.A.R.T. is best-effort
+            _LOGGER.warning(
+                "Error fetching S.M.A.R.T. reports from Beszel Hub %s for systems %s: %s",
+                self.api_client.host,
+                _system_names(systems),
+                err,
+            )
+            return {
+                system_id: system.get("smart_devices", {})
+                for system_id, system in (self.data or {}).items()
+            }
+        drives = {}
+        for record in records:
+            drives.setdefault(record["system"], {})[record["id"]] = record
+        return drives
 
     async def _fetch_system_stats(self, systems):
         """Fetch fresh statistics records, returning None on a partial failure."""

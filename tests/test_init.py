@@ -40,6 +40,7 @@ async def test_integration_setup_update_and_unload(hass, freezer):
             }
         ]
         api.async_get_network_monitors.return_value = []
+        api.async_get_smart_devices.return_value = []
         api.async_get_systems = AsyncMock(
             return_value=[
                 {
@@ -75,9 +76,9 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         await hass.async_block_till_done()
         coordinator = entry.runtime_data
 
-        def state(suffix):
+        def state(suffix, platform="sensor"):
             entity_id = registry.async_get_entity_id(
-                "sensor", DOMAIN, f"{prefix}_{suffix}"
+                platform, DOMAIN, f"{prefix}_{suffix}"
             )
             assert entity_id is not None
             return hass.states.get(entity_id)
@@ -127,15 +128,37 @@ async def test_integration_setup_update_and_unload(hass, freezer):
 
         api.async_get_systems.return_value[0]["info"] = {}
         api.async_get_system_details.return_value = {}
+        disk = {
+            "cycles": 0,
+            "hours": 120,
+            "id": "disk",
+            "name": "nvme0",
+            "state": "PASSED",
+            "system": "system",
+            "temp": 37,
+        }
+        api.async_get_smart_devices.return_value = [disk]
         api.async_get_latest_system_stats.return_value = {
             "system": {
-                "stats": {"b": [None, 1572864], "t": {"cpu": 47}},
+                "stats": {"b": [None, 1572864], "la": [0, 0.3, 0.15], "t": {"cpu": 47}},
                 "created": dt_util.utcnow().isoformat(),
             }
         }
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         assert state("stats_nr").state == "1.57"
+        for minutes, expected in ((1, "0.0"), (5, "0.3"), (15, "0.15")):
+            load = state(f"stats_load_average_{minutes}m")
+            assert load.state == expected
+            assert load.attributes["state_class"] == "measurement"
+            assert "unit_of_measurement" not in load.attributes
+        assert state("smart_disk_state", "binary_sensor").state == "off"
+        assert state("smart_disk_state", "binary_sensor").attributes[
+            "device_class"
+        ] == ("problem")
+        assert state("smart_disk_temp").state == "37.0"
+        assert state("smart_disk_hours").state == "120.0"
+        assert state("smart_disk_cycles").state == "0.0"
         assert state("temperature_cpu").state == "47.0"
         assert state("stats_cpu").state == "unknown"
         assert state("info_os").state == "unknown"
@@ -166,23 +189,36 @@ async def test_integration_setup_update_and_unload(hass, freezer):
         assert await async_remove_config_entry_device(hass, entry, removed)
 
         api.async_get_latest_system_stats.side_effect = RuntimeError("stats failed")
+        disk["state"] = "FAILED"
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         assert state("stats_nr").state == "1.57"
+        assert state("smart_disk_state", "binary_sensor").state == "on"
         cached = coordinator.data["system"]["stats"]
         freezer.tick(301)
+        api.async_get_smart_devices.side_effect = RuntimeError("S.M.A.R.T. failed")
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         assert state("stats_nr").state == "unavailable"
+        assert state("stats_load_average_1m").state == "unavailable"
+        assert state("smart_disk_state", "binary_sensor").state == "on"
         assert coordinator.data["system"]["stats"] == cached
         assert state("info_u").state == "unknown"
         assert state("status_status").state == "up"
 
         api.async_get_systems.return_value[0]["status"] = "down"
+        api.async_get_smart_devices.side_effect = None
+        disk["state"] = "UNKNOWN"
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         assert state("stats_nr").state == "unavailable"
         assert state("status_status").state == "down"
+        assert state("smart_disk_state", "binary_sensor").state == "unknown"
+
+        api.async_get_smart_devices.return_value = []
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert state("smart_disk_state", "binary_sensor").state == "unavailable"
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
